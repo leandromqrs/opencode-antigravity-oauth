@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.env*
+*.pem
+*.bin
+*.elf
+*-evidence.json
+.opencode/verification-tmp/

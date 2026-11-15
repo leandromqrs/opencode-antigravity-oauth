@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false
+  },
+  "include": [
+    "src/server.ts",
+    "src/offline-opencode.ts",
+    "src/configured-*.ts"
+  ],
+  "exclude": []
+}

@@ -1,0 +1,55 @@
+{
+  "name": "opencode-antigravity-oauth",
+  "version": "0.0.0-offline.1",
+  "private": true,
+  "description": "Offline shipped-artifact protocol evidence workbench; not an active OAuth provider",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "exports": {
+    ".": "./dist/server.js",
+    "./protocol-evidence": "./dist/index.js",
+    "./oauth-workbench": "./dist/oauth-workbench.js",
+    "./offline-inference": "./dist/offline-inference.js",
+    "./offline-opencode": "./dist/offline-opencode.js",
+    "./configured-plugin": "./dist/configured-plugin.js",
+    "./configured-driver": "./dist/configured-driver.js"
+  },
+  "bin": {
+    "antigravity-offline-inspect": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    "CONFIGURED-INTEGRATION.md",
+    "SPEC*.md",
+    "FINDINGS*.md",
+    "CAPABILITY-MAP*.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.opencode.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.opencode.json --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "inspect": "node dist/cli.js",
+    "demo:inference": "node examples/offline-inference.mjs",
+    "demo:opencode": "node examples/offline-opencode.mjs",
+    "demo:configured": "node examples/configured-plugin.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.3",
+    "typescript": "~5.9.3",
+    "@types/json-schema": "7.0.15"
+  },
+  "overrides": {
+    "gcp-metadata@8.1.4": {
+      "gaxios": "7.1.4"
+    }
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.5",
+    "@opencode/ai": "2.2.5",
+    "effect": "4.0.6"
+  }
+}
