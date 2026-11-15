@@ -1,5 +1,9 @@
 # Estado
 
+## REPO CRIADO (15/11/2026): github.com/leandromqrs/opencode-antigravity-oauth (privado)
+
+Pedido explícito do usuário: criar repo, commit e push de tudo do projeto. Repo privado criado via GitHub MCP (conta leandromqrs); git init -b main; commit 27a4f56 `feat: import Antigravity OAuth plugin for OpenCode V2` (84 arquivos, 13643 linhas: src/test/docs/examples + registros de missão .opencode/*.md); push origin/main verificado (ls-remote HEAD=27a4f56, working tree limpo). Varredura de segredos antes do commit: nenhum token/refresh/client_secret nos arquivos (clientId público do consumidor AGY é identificador, não segredo). Excluídos via .gitignore: node_modules, dist, coverage, .env*, *.pem/bin/elf, *-evidence.json e .opencode/verification-tmp/ (76MB de logs/probes efêmeros, adicionado agora). Privacidade confirmada: 404 anônimo em github.com e api.github.com. Escopo: somente opencode-antigravity-oauth (My contém projetos independentes).
+
 ## EM ANDAMENTO (15/11/2026): quota no painel — eleição cross-process implementada, aguardando liberar porta (T2.11)
 
 Causa raiz real da ausência no painel (após T2.10): há DOIS servidores. O antigo `opencode serve --port41071` (pid21197, manual Nov14) recebeu shutdown no restart do usuário (19:16Z, watchers pararam) mas travou e NÃO saiu — ainda segura as portas62365/62367/62369. O novo serviço gerenciado (pid650044, porta49374, descoberto por Service.discover) não consegue bindar62369; como o autoKey do Antigravity é process-local, o check custom3 resulta missing_credential e a linha é excluída do painel. OpenChamber e esta sessão ainda estão conectados ao servidor antigo (ancestry bash→pty23401→opencode21197). Junie/QwenCloud aparecem porque usam shared:true: chave em arquivo de estado + health probe + takeover, funcionando através de processos. O restart do usuário não afetou o servidor que o app dele usa.
