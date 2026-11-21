@@ -2,7 +2,7 @@
   "name": "opencode-google-antigravity-oauth",
   "version": "0.0.0-offline.1",
   "private": true,
-  "description": "Offline shipped-artifact protocol evidence workbench; not an active OAuth provider",
+  "description": "Unofficial Google Antigravity authentication plugin for OpenCode V2; use at your own risk",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"

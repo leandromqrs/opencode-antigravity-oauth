@@ -1,51 +1,90 @@
 # opencode-google-antigravity-oauth
 
-Projeto experimental e não oficial para estudar OAuth PKCE e testar um adaptador OpenCode V2 com dados sintéticos. O caminho rápido não usa conta, credenciais nem a API do Google.
+Google Antigravity authentication plugin for OpenCode V2.
 
-[Comece offline](#comece-offline) · [OpenCode Quota](#opencode-quota) · [O que os testes cobrem](#o-que-os-testes-cobrem)
+[Installation](#installation) · [Sign in](#sign-in) · [Quota](#quota) · [Tests](#tests)
 
-> [!IMPORTANT]
-> Não use uma conta Antigravity neste plugin. A [FAQ oficial do Google](https://antigravity.google/docs/faq/#why-cant-i-use-third-party-software-such-as-claude-code-openclaw-or-opencode-with-my-antigravity-login) proíbe usar esse login em ferramentas de terceiros, incluindo OpenCode, e alerta para suspensão ou encerramento da conta. A opção `authorizationAcknowledged` não concede permissão. Para usar Gemini em uma ferramenta de terceiros, o Google recomenda uma chave do Gemini Enterprise ou do Google AI Studio.
+> [!WARNING]
+> Use this plugin at your own risk. Google's [official FAQ](https://antigravity.google/docs/faq/#why-cant-i-use-third-party-software-such-as-claude-code-openclaw-or-opencode-with-my-antigravity-login) prohibits using an Antigravity login in third-party tools, including OpenCode, and warns that doing so can lead to account suspension or termination. This plugin is unofficial and not endorsed by Google. The `authorizationAcknowledged` option does not grant permission; it only records that you accepted this risk for your own account. For Gemini in a third-party tool, Google recommends a Gemini Enterprise or Google AI Studio API key.
 
-## Comece offline
+The plugin connects your Antigravity account to OpenCode with OAuth PKCE, discovers the account's model catalog, and publishes its quota to OpenCode Quota. Credentials stay in OpenCode's native credential storage.
 
-Requer **Node.js 22+** e npm. Não precisa instalar o OpenCode nem o `agy` para rodar os exemplos.
+## Features
+
+- OAuth PKCE sign-in with the Antigravity consumer client, code-paste callback, and token refresh.
+- Account-bound credentials and catalog discovery, with a static experimental fallback when the live catalog is unavailable.
+- Native streaming driver that preserves text, tool calls, reasoning, and usage metadata.
+- Quota publication through the ticket-based `slkiser.opencode-quota/publishQuota` RPC, with no local HTTP server.
+- Optional legacy loopback quota bridge for older OpenCode Quota builds.
+
+## Requirements
+
+- Node.js 22+ and npm.
+- OpenCode V2 (the plugin pins the OpenCode 2.2.5 SDK).
+- An OpenCode Quota build with [`mode: "published"`](https://github.com/slkiser/opencode-quota/pull/518) support for quota publication.
+
+## Installation
+
+1. Place the Antigravity consumer client secret in `~/.config/opencode/antigravity-oauth-client.json` (or `$XDG_CONFIG_HOME/opencode/antigravity-oauth-client.json`). The file must be a regular file owned by you, readable only by you (`0600` or `0400`), at most 4 KiB, holding the 35-character secret. The plugin reads it lazily, only for token exchange and refresh. Never commit it.
+
+2. Build the plugin and add it to `plugins` in your project or global `opencode.jsonc`, preserving existing entries:
+
+   ```sh
+   npm ci --ignore-scripts --no-audit --no-fund
+   npm run build
+   ```
+
+   ```jsonc
+   {
+     "package": "/absolute/path/to/opencode-google-antigravity-oauth",
+     "options": {
+       "mode": "agy-local-oauth",
+       "authorizationAcknowledged": true,
+       "publishQuota": true
+     }
+   }
+   ```
+
+## Sign in
 
 ```sh
-git clone https://github.com/leandromqrs/opencode-google-antigravity-oauth.git
-cd opencode-google-antigravity-oauth
-npm ci --ignore-scripts --no-audit --no-fund
-npm run build
-npm run demo:configured
+opencode auth login agy-local-oauth --method configured-pkce
 ```
 
-O demo simula, em memória, a troca do código OAuth, a renovação do token e uma geração. A instalação de dependências acessa o registro npm; o demo não chama serviços externos.
+Open the authorization URL, sign in with your Google account, and paste the code shown on the Antigravity callback page. Paste only that code, never an access or refresh token and never the address-bar URL.
 
-## OpenCode Quota
+After sign-in, select an `antigravity-local` model. The catalog is discovered automatically and refreshed while the connection is active.
 
-Use [o perfil de exemplo](examples/opencode-quota-demo.jsonc) em uma configuração isolada do OpenCode. Ajuste os dois caminhos absolutos e use um build do OpenCode Quota com suporte a [`mode: "published"`](https://github.com/slkiser/opencode-quota/pull/518). O perfil declara um provedor fictício para tornar a cota visível; o modelo não serve para inferência. Adicione às configurações do Quota, em `providers.custom`:
+Options:
+
+| Option | Meaning |
+| --- | --- |
+| `mode` | `agy-local-oauth` for the consumer-client integration. `agy-public-oauth` is an experimental secretless login, unverified by Google. |
+| `authorizationAcknowledged` | Must be `true`; records your acceptance of the account risk. |
+| `publishQuota` | `true` publishes the account quota to OpenCode Quota. Local mode only. |
+| `quotaBridge` | Legacy loopback HTTP bridge (`port`, `apiKeyEnv`, `autoKey`, `shared`). Prefer `publishQuota`. |
+
+## Quota
+
+With `publishQuota: true`, the plugin reads the account's quota summary with the active OAuth credential and publishes `quota-v1` snapshots through `slkiser.opencode-quota/publishQuota`. Each publication requests a single-use ticket first. The first attempt runs about 15 seconds after load, then every 30 seconds. When the account is disconnected or the summary is unavailable, the plugin publishes empty entries, which withdraws the panel row. No port is opened.
+
+Register the source in the OpenCode Quota settings, under `providers.custom`:
 
 ```json
-{"id":"antigravity-demo","providerId":"antigravity-demo","label":"Antigravity (sintético)","mode":"published"}
+{ "id": "antigravity-quota", "providerId": "antigravity-local", "label": "Google Antigravity", "mode": "published" }
 ```
 
-O exemplo usa o RPC `slkiser.opencode-quota/publishQuota` e envia a cota fixa de 73% com o ticket fornecido pelo receptor. Não registra OAuth, não carrega o plugin principal e não abre um servidor HTTP. Não é uma medição da sua conta. A renomeação mantém os IDs existentes do plugin principal e o diretório de estado da ponte legada.
+The legacy `quotaBridge` option still serves the same quota over an authenticated loopback HTTP endpoint for Quota builds without published support. It is kept for compatibility; new setups should use `publishQuota`.
 
-## O que os testes cobrem
-
-- **OAuth:** criação e validação de transações PKCE, expiração, renovação com respostas simuladas e troca de conta.
-- **Inferência offline:** requisições e streams sintéticos com texto, raciocínio, ferramentas e metadados de uso.
-- **OpenCode V2:** registro do plugin, publicação de catálogo e integração com o SDK em fixtures. Os resultados não confirmam compatibilidade com o serviço Google, acesso a modelos ou direitos de uso.
+## Tests
 
 ```sh
 npm run typecheck
 npm test
-npm run demo:inference
-npm run demo:opencode
 ```
 
-`npm test` inclui o build. Os demos adicionais usam o build gerado.
+`npm test` includes the build. The suite covers OAuth transactions and refresh, catalog discovery, the streaming driver, quota parsing and publication, the legacy bridge, and option validation, all against synthetic fixtures. Fixture results do not confirm compatibility with Google's services, model access, or entitlement.
 
-## Código e histórico
+## Project layout
 
-`src/oauth-workbench.ts` contém o workbench PKCE; `src/offline-inference.ts` trata as requisições e os streams das fixtures; `src/offline-opencode.ts` faz a adaptação ao SDK. `src/server.ts` é o ponto de entrada experimental, separado dos demos offline. Resultados históricos e especificações anteriores continuam no histórico Git.
+`src/configured-plugin.ts` registers the integration, catalog, and driver. `src/configured-oauth.ts` and `src/local-oauth-client.ts` handle the PKCE flow and the local consumer client. `src/configured-quota.ts` reads and shapes the account quota; `src/configured-quota-publication.ts` publishes it through the ticket RPC. `src/server.ts` is the plugin entrypoint.
