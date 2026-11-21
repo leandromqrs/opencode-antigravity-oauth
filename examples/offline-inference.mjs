@@ -1,4 +1,4 @@
-import { inferOffline } from 'opencode-antigravity-oauth/offline-inference';
+import { inferOffline } from 'opencode-google-antigravity-oauth/offline-inference';
 
 const input = {
   project: 'synthetic-project', model: 'synthetic-model', requestId: 'synthetic-request',

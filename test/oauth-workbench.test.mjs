@@ -53,10 +53,10 @@ test('rejects encoded duplicate parameter names and invalid runtime inputs', () 
 });
 
 test('workbench remains a named helper alongside the inert root plugin', async () => {
-  const module = await import('opencode-antigravity-oauth/oauth-workbench');
+  const module = await import('opencode-google-antigravity-oauth/oauth-workbench');
   assert.equal(module.deriveS256Challenge(verifier), deriveS256Challenge(verifier));
   assert.equal('default' in module, false);
-  assert.equal(typeof (await import('opencode-antigravity-oauth')).default.setup, 'function');
+  assert.equal(typeof (await import('opencode-google-antigravity-oauth')).default.setup, 'function');
 });
 
 test('rejects missing duplicate empty or mismatched state and ambiguous outcomes', () => {

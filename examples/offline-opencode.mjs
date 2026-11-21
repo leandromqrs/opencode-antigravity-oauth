@@ -1,5 +1,5 @@
 import { make } from '@opencode/ai';
-import { createOfflineModel } from 'opencode-antigravity-oauth/offline-opencode';
+import { createOfflineModel } from 'opencode-google-antigravity-oauth/offline-opencode';
 
 const model = createOfflineModel({
   provider: 'synthetic-offline', model: 'synthetic-model', project: 'synthetic-project', requestId: 'synthetic-request',

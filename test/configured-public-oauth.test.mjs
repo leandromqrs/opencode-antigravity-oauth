@@ -83,7 +83,7 @@ test('explicit public OAuth-only root setup is inert and registers only integrat
   let requests = 0;
   globalThis.fetch = async () => { requests++; throw Error('network forbidden'); };
   try {
-    const { default: root } = await import('opencode-antigravity-oauth');
+  const { default: root } = await import('opencode-google-antigravity-oauth');
     const host = await setup(root);
     assert.equal(host.reads(), 0); assert.equal(requests, 0);
     assert.equal(host.method.integrationID, 'agy-public-oauth');

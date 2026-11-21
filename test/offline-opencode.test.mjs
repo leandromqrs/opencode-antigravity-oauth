@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { make, LanguageModel, LLMEvent } from '@opencode/ai';
 import { Schema } from 'effect';
-import { createOfflineModel } from 'opencode-antigravity-oauth/offline-opencode';
+import { createOfflineModel } from 'opencode-google-antigravity-oauth/offline-opencode';
 
 const ai = make();
 const config = transport => ({ provider: 'synthetic-offline', model: 'synthetic-model', project: 'synthetic-project',
@@ -126,9 +126,9 @@ test('SDK stream consumer break cancels and closes caller-owned transport', asyn
 });
 
 test('offline factory stays a named helper alongside the inert root plugin and snapshots configuration', async () => {
-  const exported = await import('opencode-antigravity-oauth/offline-opencode');
+  const exported = await import('opencode-google-antigravity-oauth/offline-opencode');
   assert.deepEqual(Object.keys(exported), ['createOfflineModel']);
-  assert.equal(typeof (await import('opencode-antigravity-oauth')).default.setup, 'function');
+  assert.equal(typeof (await import('opencode-google-antigravity-oauth')).default.setup, 'function');
   const settings = config(fixture(candidate('x', 'STOP')));
   const model = createOfflineModel(settings);
   settings.transport = () => { throw Error('secret'); }; settings.textSemantics = 'auto';

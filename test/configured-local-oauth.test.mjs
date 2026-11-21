@@ -105,7 +105,7 @@ test('old local scope binding requires explicit reauthorization before refresh w
 });
 
 test('local preset is explicit, immutable, root-loadable, and never an implicit public fallback', async () => {
-  const { default: root } = await import('opencode-antigravity-oauth');
+  const { default: root } = await import('opencode-google-antigravity-oauth');
   const host = await setup(root); await host.cleanup();
   const dependencies = { fetch: async () => { throw Error('unexpected network'); }, loadLocalClientSecret: async () => { throw Error('must not load local client'); } };
   for (const config of [{ mode: 'agy-local-oauth' }, { ...options(), authorizationAcknowledged: false }, { ...options(), path: '/other/binary' }, { ...options(), clientSecret: fakeSecret }]) {

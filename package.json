@@ -1,5 +1,5 @@
 {
-  "name": "opencode-antigravity-oauth",
+  "name": "opencode-google-antigravity-oauth",
   "version": "0.0.0-offline.1",
   "private": true,
   "description": "Offline shipped-artifact protocol evidence workbench; not an active OAuth provider",
@@ -13,6 +13,7 @@
     "./oauth-workbench": "./dist/oauth-workbench.js",
     "./offline-inference": "./dist/offline-inference.js",
     "./offline-opencode": "./dist/offline-opencode.js",
+    "./offline-quota-publication": "./dist/offline-quota-publication.js",
     "./configured-plugin": "./dist/configured-plugin.js",
     "./configured-driver": "./dist/configured-driver.js"
   },
@@ -22,11 +23,7 @@
   "files": [
     "dist",
     "examples",
-    "README.md",
-    "CONFIGURED-INTEGRATION.md",
-    "SPEC*.md",
-    "FINDINGS*.md",
-    "CAPABILITY-MAP*.md"
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.opencode.json",

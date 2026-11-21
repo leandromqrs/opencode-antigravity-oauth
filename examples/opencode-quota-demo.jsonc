@@ -1,0 +1,17 @@
+{
+  "plugins": [
+    { "package": "/absolute/path/to/opencode-quota" },
+    { "package": "/absolute/path/to/opencode-google-antigravity-oauth/dist/offline-quota-publication.js" }
+  ],
+  "model": "antigravity-demo/fixture",
+  "providers": {
+    "antigravity-demo": {
+      "package": "@opencode/ai/compat/openai-compatible",
+      "name": "Antigravity (synthetic)",
+      "options": { "baseURL": "https://example.invalid/v1" },
+      "models": {
+        "fixture": { "name": "Offline fixture", "limit": { "context": 4096, "output": 512 } }
+      }
+    }
+  }
+}

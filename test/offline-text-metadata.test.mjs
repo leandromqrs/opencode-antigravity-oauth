@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { make, LLMEvent } from '@opencode/ai';
 import { Schema } from 'effect';
-import { createOfflineModel } from 'opencode-antigravity-oauth/offline-opencode';
+import { createOfflineModel } from 'opencode-google-antigravity-oauth/offline-opencode';
 
 const ai = make();
 const frame = response => new TextEncoder().encode(`data: ${JSON.stringify({ response })}\n\n`);

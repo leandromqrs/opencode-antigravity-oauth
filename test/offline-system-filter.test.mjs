@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { make } from '@opencode/ai';
-import { createOfflineModel } from 'opencode-antigravity-oauth/offline-opencode';
+import { createOfflineModel } from 'opencode-google-antigravity-oauth/offline-opencode';
 
 const ai = make();
 const config = transport => ({ provider: 'synthetic-offline', model: 'synthetic-model', project: 'synthetic-project',

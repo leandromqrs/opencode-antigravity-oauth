@@ -42,7 +42,7 @@ test('root is an inert native plugin and setup reads ctx.options without startin
   let requests = 0, integrations = 0, providers = 0;
   globalThis.fetch = async () => { requests++; throw Error('unexpected network'); };
   try {
-    const { default: plugin } = await import('opencode-antigravity-oauth');
+    const { default: plugin } = await import('opencode-google-antigravity-oauth');
     assert.equal(typeof plugin.setup, 'function'); assert.equal(requests, 0);
     await assert.rejects(plugin.setup({ options: {} }));
     const providerHost = createProviderHost(() => { providers++; });
