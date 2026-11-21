@@ -8,8 +8,6 @@ import { createCatalogClient, CatalogDiagnostic, getCatalogFallbackProject, LOCA
 import { staticFallbackModels } from './configured-static-models.js';
 import { binding, PublicOAuthDiagnostic, rejectConfigured, validateProductionConfiguration, validatePublicOAuthConfiguration, validateLocalOAuthConfiguration, validateSyntheticConfiguration, type Configuration, type PresetOAuthConfiguration } from './configured-security.js';
 
-const sharedRuntimeDriverPackage = new URL('./configured-driver.js?runtime=shared-v53', import.meta.url).href;
-
 export function createAntigravityPlugin(configuration: unknown, dependencies: OAuthDependencies): Plugin.Plugin {
   return configuredPlugin(validateProductionConfiguration(configuration), dependencies);
 }
@@ -73,6 +71,8 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
           return inventory && inventory.expires > now() ? inventory.config : undefined;
         } } : {}),
       }) : undefined;
+      // The host caches provider models by driver package URL; a unique URL per runtime forces it to rebind after a reload instead of reusing a disposed runtime.
+      const driverPackage = runtime ? new URL(`./configured-driver.js?runtime=${runtime.id}`, import.meta.url).href : undefined;
       const selection = async () => {
         try {
           const current = await ctx.integration.connection.active(config.integrationId);
@@ -216,9 +216,9 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
           }
           await assertSelection(selected);
           return { configuration: discovered, entry: { info: { ...Provider.Info.empty(Provider.ID.make(discovered.providerId)), name: staticFallback ? `${config.name} (static experimental; entitlement unverified${discovered.inference.project ? '' : '; projectless'})` : config.name, activation: 'enabled',
-            integrationID: Integration.ID.make(config.integrationId), package: sharedRuntimeDriverPackage,
+            integrationID: Integration.ID.make(config.integrationId), package: driverPackage!,
             settings: { configuredRuntime: runtime.id, configuredConnection: sourceConnection.id, ...(local ? { catalogExcludedModels: excluded } : {}) },
-          }, sourceConnection, models: discovered.models.map(model => ({ ...model, package: sharedRuntimeDriverPackage })) } };
+          }, sourceConnection, models: discovered.models.map(model => ({ ...model, package: driverPackage! })) } };
         };
         const fingerprint = (value: Snapshot) => JSON.stringify([value.entry, value.error && [value.error.name, value.error.message, value.error]]);
         const refresh = (): Promise<void> => {
