@@ -19,6 +19,7 @@
   "exclude": [
     "src/server.ts",
     "src/offline-opencode.ts",
+    "src/offline-quota-publication.ts",
     "src/configured-*.ts"
   ]
 }
