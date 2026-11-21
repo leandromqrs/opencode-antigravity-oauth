@@ -22,17 +22,13 @@
   },
   "files": [
     "dist",
-    "examples",
     "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.opencode.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.opencode.json --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
-    "inspect": "node dist/cli.js",
-    "demo:inference": "node examples/offline-inference.mjs",
-    "demo:opencode": "node examples/offline-opencode.mjs",
-    "demo:configured": "node examples/configured-plugin.mjs"
+    "inspect": "node dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^22.19.3",
