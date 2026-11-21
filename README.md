@@ -7,13 +7,13 @@ Plugin servidor OpenCode V2 text-only com OAuth PKCE e política fixa de destino
 **Adaptador nativo V2 disponível para revisão offline:** `opencode-antigravity-oauth/offline-opencode` exporta `createOfflineModel`, testado com `@opencode/ai@2.2.5` em geração e streaming reais do SDK, usando frames sintéticos em memória. Execute `npm run demo:opencode` após build. Configuração, transport e políticas delta/cumulativo/uso são obrigatórios; somente texto é suportado. Veja [contrato nativo, exceção de compilação e dependências](FINDINGS-offline-opencode.md). Não há ativação ou inferência live.
 
 > [!IMPORTANT]
-> **Não comprova integração consumer autorizada.** Há implementação de OAuth PKCE, refresh e provider nativo text-only, testada apenas com fixtures. `agy-public-oauth` permanece sem secret; o novo `agy-local-oauth` permite seu uso local explicitamente autorizado, sem copiá-lo para configuração ou projeto. Não há ativação padrão ou prova de entitlement. A [FAQ oficial](https://antigravity.google/docs/faq), reconferida pelo parent em 13/11/2026, proíbe usar o login Antigravity em integrações de terceiros como OpenCode e alerta para suspensão da conta. Nenhum caminho oficial alternativo de cliente foi estabelecido; reconhecer a configuração não concede permissão.
+> **Não use uma conta Antigravity neste plugin para validar o OAuth.** A [FAQ oficial](https://antigravity.google/docs/faq/#why-cant-i-use-third-party-software-such-as-claude-code-openclaw-or-opencode-with-my-antigravity-login) proíbe usar o login do Antigravity em ferramentas de terceiros, incluindo OpenCode, e alerta para suspensão ou encerramento da conta. `authorizationAcknowledged` não concede permissão. Para validar o fluxo sem uma conta, use `npm test` e `npm run demo:configured`. Para usar Gemini em uma ferramenta de terceiros, o Google recomenda uma chave do Gemini Enterprise ou do Google AI Studio.
 
 ### Integração configurável
 
 O export raiz padrão é um `Plugin.define` real: `setup(ctx)` lê configuração pública explícita de `ctx.options`, sem iniciar login automaticamente. No modo completo existente, exige `authorizationAcknowledged:true`, cliente público autorizado, destinos Google fixos, projeto, metadados completos e políticas explícitas de texto/uso. O modo `agy-public-oauth` registra somente OAuth/refresh; `agy-local-oauth` também descobre modelos e registra o provedor após encontrar uma conexão OAuth própria ativa. `createAntigravityPlugin` aplica a mesma política; o chamador não pode ampliar destinos/scopes/callback. O OpenCode gerencia a persistência nativa; falha de gravação impede inferência. `createSyntheticAntigravityPlugin` é separado para fake fetch e hosts reservados. O demo `npm run demo:configured` executa autorização → refresh → geração SDK inteiramente em memória. Veja [configuração, contratos, segurança e limites](CONFIGURED-INTEGRATION.md).
 
-### Login com configuração local autorizada do agy
+### Configuração do fluxo local (referência técnica)
 
 Após build e recarga pelo responsável pela instalação, use estas opções na entrada V2 do plugin:
 
@@ -36,9 +36,9 @@ Para mostrar a quota no OpenCode Quota, adicione a opção opcional `quotaBridge
 
 A chave é gerada pelo plugin por processo, exportada nessa variável de ambiente e removida no cleanup; nada de credencial ou projeto é aceito do chamante. Veja [bridge de quota](CONFIGURED-INTEGRATION.md#quota-bridge-for-opencode-quota).
 
-O usuário confirmou login real bem-sucedido. Descoberta e publicação de modelos são etapas separadas; um catálogo experimental não estabelece permissão Google, entitlement ou inferência funcional.
+Uma verificação histórica registrou login bem-sucedido. Isso não confirma autorização do Google, acesso a modelos nem funcionamento atual.
 
-Estado atual: esforços agrupados estão publicados e geração stateless explícita `low`/`medium` respondeu no host real. A quota foi confirmada pelo usuário e não foi alterada. Avisos `system` cronológicos são preservados com o wrapper escapado do Gemini nativo, corrigindo `offline_stage=input`. A comparação executável com o conversor Google e a preparação originais da referência também recebeu429 no contexto completo, sem alterar sistema, sequência textual ou assinaturas; isso não equivale a executar seu plugin inteiro no host. Defaults thinking Gemini e retries HTTP locais limitados foram alinhados à referência com regressões. Nenhuma conversão lossy de schema, remoção de instruções, ocultação de identidade ou dependência da referência ficou no driver final `shared-v48`. Build, tipos e 360 testes passam. Controle stateless low respondeu `FINAL48OK`; a sessão completa continua429, sem causa remota comprovada ou inferência de quota esgotada. Consulte `.opencode/status.md`; a missão não está concluída.
+Em testes históricos, requisições isoladas com esforço `low` e `medium` responderam, mas uma sessão completa recebeu HTTP 429. A causa não foi confirmada. Consulte [o registro técnico](.opencode/status.md) para detalhes; esses resultados não são uma validação atual.
 
 ### Login experimental com client ID público
 
@@ -62,7 +62,7 @@ Se autorizado a tentar o fluxo, abra `/connect` e selecione **Antigravity public
 
 Somente os dois presets explícitos aceitam código isolado: sem a URL completa, não é possível validar o state retornado. O plugin mantém state aleatório na autorização, PKCE exclusivo por tentativa, expiração de cinco minutos, uso único e proteção contra troca de conta; a vinculação código/verifier depende do servidor OAuth. URL completa válida continua opcional nesses modos. O modo configurado completo e o workbench puro permanecem estritos. Veja [instruções, limitação de state e diagnóstico sanitizado](CONFIGURED-INTEGRATION.md#experimental-public-client-login-only).
 
-Validação independente anterior ao novo modo OAuth-only, após a correção de troca de conta: **91 testes**, typecheck, build e três demos passaram; runtime sem rede. O pacote também foi instalado isoladamente sem dependências de desenvolvimento e seu plugin raiz importou sem rede. Esses resultados históricos não cobrem o novo delta, cuja validação final pertence ao parent. Auditorias: **21 alertas moderados no checkout, 25 no consumidor; nenhum alto/crítico**. Há pendências transitivas antes de publicação, além de autorização e compatibilidade live não verificadas. O provider permanece text-only, sem suporte nativo a ferramentas de agente.
+O typecheck, o build, a suíte de testes e o demo configurado foram revalidados sem login real. A auditoria do lockfile apontou 21 alertas moderados, sem alertas altos ou críticos. Isso não comprova compatibilidade com o serviço Google.
 
 Não são emitidos `enabledCreditTypes`, fallback de créditos ou pedidos de cobrança, compra, plano ou entitlement; não há substituição por API key/ACP. Nas fixtures, `cost: []` significa tarifa ausente/desconhecida, não serviço gratuito ou custo monetário zero. Catálogo, capacidades e limites fornecidos pelo operador são configuração; OAuth não comprova assinatura ou entitlement.
 
