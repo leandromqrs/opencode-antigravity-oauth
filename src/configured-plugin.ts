@@ -2,6 +2,7 @@ import { Plugin, Provider, Integration, type Credential } from '@opencode/plugin
 import { createOAuthClient, type OAuthDependencies } from './configured-oauth.js';
 import { fetchQuotaSummary, quotaV1FromSummary, unavailableQuotaV1, type QuotaV1 } from './configured-quota.js';
 import { acquireQuotaBridge } from './configured-quota-bridge-plugin.js';
+import { quotaReceiver, startQuotaPublication } from './configured-quota-publication.js';
 import { registerConfiguredRuntime } from './configured-driver.js';
 import { createCatalogClient, CatalogDiagnostic, getCatalogFallbackProject, LOCAL_PROVIDER_ID, LOCAL_INFERENCE_ENDPOINT } from './configured-catalog.js';
 import { staticFallbackModels } from './configured-static-models.js';
@@ -60,7 +61,9 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
       let reloadPending = false;
       let timer: ReturnType<typeof setInterval> | undefined;
       const quotaConfig = 'mode' in config && config.mode === 'agy-local-oauth' ? config.quotaBridge : undefined;
+      const publishQuota = 'mode' in config && config.mode === 'agy-local-oauth' && config.publishQuota === true;
       let quotaRelease: (() => Promise<void>) | undefined;
+      let stopQuotaPublication: (() => void) | undefined;
       let quotaCache: { value: QuotaV1; expires: number } | undefined;
       let quotaPending: Promise<QuotaV1> | undefined;
       const catalog = createCatalogClient(dependencies.fetch, controller.signal);
@@ -110,6 +113,8 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
         if (disposed) return;
         disposed = true; clearInterval(timer); controller.abort(); oauth.close(); runtime?.dispose(); inventories.clear(); discovering.clear(); failures.clear(); snapshot = {};
         quotaCache = undefined; quotaPending = undefined;
+        const stopPublication = stopQuotaPublication; stopQuotaPublication = undefined;
+        if (stopPublication) stopPublication();
         const release = quotaRelease; quotaRelease = undefined;
         if (release) await release();
         await Promise.allSettled(registrations.reverse().map(registration => registration.dispose()));
@@ -274,6 +279,10 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
           if (acquired.status.diagnostic) console.warn('Antigravity quota bridge unavailable:', acquired.status.diagnostic);
           if (disposed) await acquired.release();
           else quotaRelease = acquired.release;
+        }
+        if (publishQuota && !disposed) {
+          const receiver = ctx.rpc(quotaReceiver);
+          stopQuotaPublication = startQuotaPublication(input => receiver.publishQuota(input), getQuota, controller.signal, dependencies.publicationDelays);
         }
         return cleanup;
       } catch (error) { await cleanup(); if (error instanceof CatalogDiagnostic || error instanceof PublicOAuthDiagnostic) throw error; return rejectConfigured(); }

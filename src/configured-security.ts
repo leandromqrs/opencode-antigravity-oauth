@@ -20,6 +20,7 @@ export interface PublicOAuthConfiguration extends OAuthConfiguration {
 export interface LocalOAuthConfiguration extends OAuthConfiguration {
   mode: 'agy-local-oauth';
   quotaBridge?: { port: number; apiKeyEnv: string; autoKey: boolean; shared: boolean };
+  publishQuota?: true;
 }
 export type PresetOAuthConfiguration = PublicOAuthConfiguration | LocalOAuthConfiguration;
 export interface Configuration extends OAuthConfiguration {
@@ -31,6 +32,14 @@ export interface Configuration extends OAuthConfiguration {
 export function rejectConfigured(): never { throw new Error('Configured OAuth integration: invalid or unsupported operation'); }
 
 class QuotaBridgeOptionError extends Error {}
+class QuotaPublicationOptionError extends Error {}
+
+function publishQuotaOption(value: unknown, mode: PresetOAuthConfiguration['mode']): true | undefined {
+  if (value === undefined || value === false) return undefined;
+  if (mode !== 'agy-local-oauth') throw new QuotaPublicationOptionError('Antigravity publishQuota is available only in agy-local-oauth mode.');
+  if (value !== true) throw new QuotaPublicationOptionError('Antigravity publishQuota must be true.');
+  return true;
+}
 
 // Setting these for the whole plugin lifetime would change process resolution rather than carry a quota key.
 const reservedEnvironmentNames = ['PATH', 'HOME', 'HOSTNAME', 'SHELL', 'ENV', 'PROMPT_COMMAND', 'TZ', 'LANG', 'LC_ALL', 'TMPDIR', 'NODE_OPTIONS',
@@ -173,14 +182,16 @@ const reviewedScopes: readonly string[] = Object.freeze(['openid', 'https://www.
   'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/cclog', 'https://www.googleapis.com/auth/experimentsandconfigs', 'https://www.googleapis.com/auth/aicode']);
 
-function validatePresetOAuthConfiguration<M extends PresetOAuthConfiguration['mode']>(value: unknown, mode: M): OAuthConfiguration & { mode: M; quotaBridge?: { port: number; apiKeyEnv: string; autoKey: boolean; shared: boolean } } {
+function validatePresetOAuthConfiguration<M extends PresetOAuthConfiguration['mode']>(value: unknown, mode: M): OAuthConfiguration & { mode: M; quotaBridge?: { port: number; apiKeyEnv: string; autoKey: boolean; shared: boolean }; publishQuota?: true } {
   try {
-    const options = record(value, ['mode', 'authorizationAcknowledged', 'quotaBridge']);
+    const options = record(value, ['mode', 'authorizationAcknowledged', 'quotaBridge', 'publishQuota']);
     if (options.mode !== mode || options.authorizationAcknowledged !== true) rejectConfigured();
     const quotaBridge = quotaBridgeOption(options.quotaBridge, mode);
+    const publishQuota = publishQuotaOption(options.publishQuota, mode);
     return Object.freeze({ mode, authorizationAcknowledged: true,
       integrationId: mode, name: mode === 'agy-local-oauth' ? 'Google Antigravity' : 'Antigravity public OAuth (experimental, login only)',
       ...(quotaBridge ? { quotaBridge } : {}),
+      ...(publishQuota ? { publishQuota } : {}),
       oauth: Object.freeze({ issuer: 'https://accounts.google.com', authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
         tokenEndpoint: 'https://oauth2.googleapis.com/token',
         clientId: AGY_CONSUMER_CLIENT_ID,
@@ -189,7 +200,7 @@ function validatePresetOAuthConfiguration<M extends PresetOAuthConfiguration['mo
           ...(mode === 'agy-local-oauth' ? ['https://www.googleapis.com/auth/aicode', 'openid'] : [])]),
       }),
     });
-  } catch (error) { if (error instanceof QuotaBridgeOptionError) throw error; return rejectConfigured(); }
+  } catch (error) { if (error instanceof QuotaBridgeOptionError || error instanceof QuotaPublicationOptionError) throw error; return rejectConfigured(); }
 }
 
 export function validatePublicOAuthConfiguration(value: unknown): PublicOAuthConfiguration {

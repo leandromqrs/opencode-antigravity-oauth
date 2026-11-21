@@ -4,7 +4,7 @@ import { buildAuthorizationUrl, encodeStateEntropy, validateAuthorizationRespons
 import { binding, configuredText, createHTTP, PublicOAuthDiagnostic, record, rejectConfigured, rejectOAuth, type Configuration, type PresetOAuthConfiguration, type Fetch, type OAuthDiagnosticReason } from './configured-security.js';
 import { LocalOAuthClientError, loadLocalConsumerSecret } from './local-oauth-client.js';
 
-export interface OAuthDependencies { fetch: Fetch; now?: () => number; loadLocalClientSecret?: () => Promise<string> }
+export interface OAuthDependencies { fetch: Fetch; now?: () => number; loadLocalClientSecret?: () => Promise<string>; publicationDelays?: { initialMs?: number; intervalMs?: number } }
 
 export function createOAuthClient(config: Configuration | PresetOAuthConfiguration, dependencies: OAuthDependencies) {
   const http = createHTTP(dependencies.fetch), now = dependencies.now ?? Date.now;
