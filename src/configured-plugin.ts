@@ -170,8 +170,8 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
             await assertSelection(selected);
             const previous = inventories.get(sourceConnection.id);
             let inventory = previous;
-            if (!inventory || inventory.expires <= now()) {
-              inventories.delete(sourceConnection.id);
+            // Renew before expiry and keep the previous inventory until the replacement is ready, so model binding never gaps during re-discovery.
+            if (!inventory || inventory.expires <= now() + 15_000) {
               let operation = discovering.get(sourceConnection.id);
               if (!operation) {
                 if (discovering.size >= 4) rejectConfigured();
@@ -200,6 +200,8 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
               }
               try { inventory = await operation; }
               catch (error) {
+                // A failed renewal must break cached bindings: drop the inventory so a later identical catalog cannot reuse its identity.
+                inventories.delete(sourceConnection.id);
                 if (error instanceof CatalogDiagnostic && !disposed) {
                   await assertSelection(selected);
                   const safeError = new CatalogDiagnostic(error.stage, error.reason, error.status, error.serviceError, error.excluded,
