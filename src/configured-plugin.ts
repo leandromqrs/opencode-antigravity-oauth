@@ -32,7 +32,7 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
       const controller = new AbortController();
       const oauth = createOAuthClient(config, dependencies);
       const registrations: { dispose(): Promise<void> }[] = [];
-      const local = 'mode' in config && config.mode === 'agy-local-oauth';
+      const local = 'mode' in config && config.mode === 'google-agy-oauth';
       const now = dependencies.now ?? Date.now;
       let disposed = false;
       const credential = async (expectedConnection: string): Promise<Credential.OAuth> => {
@@ -58,8 +58,8 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
       let providerReady = false;
       let reloadPending = false;
       let timer: ReturnType<typeof setInterval> | undefined;
-      const quotaConfig = 'mode' in config && config.mode === 'agy-local-oauth' ? config.quotaBridge : undefined;
-      const publishQuota = 'mode' in config && config.mode === 'agy-local-oauth' && config.publishQuota === true;
+      const quotaConfig = 'mode' in config && config.mode === 'google-agy-oauth' ? config.quotaBridge : undefined;
+      const publishQuota = 'mode' in config && config.mode === 'google-agy-oauth' && config.publishQuota === true;
       let quotaRelease: (() => Promise<void>) | undefined;
       let stopQuotaPublication: (() => void) | undefined;
       let quotaCache: { value: QuotaV1; expires: number } | undefined;
@@ -163,14 +163,14 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
       try {
         registrations.push(await ctx.integration.transform(editor => {
           editor.method.update({ integrationID: config.integrationId,
-            method: { id: 'configured-pkce', type: 'oauth', label: 'mode' in config ? config.mode === 'agy-local-oauth' ? 'Sign in with Google Antigravity' : 'Experimental public-client login (secretless, unverified)' : 'Authorize configured public PKCE client' },
+            method: { id: 'configured-pkce', type: 'oauth', label: 'mode' in config ? config.mode === 'google-agy-oauth' ? 'Sign in with Google Antigravity' : 'Experimental public-client login (secretless, unverified)' : 'Authorize configured public PKCE client' },
             authorize: async () => {
               const selected = await selection();
               if (disposed) rejectConfigured();
               const transaction = oauth.begin();
               return { mode: 'code', url: transaction.url, expiresAt: transaction.expiresAt,
                 instructions: 'mode' in config
-                  ? config.mode === 'agy-local-oauth'
+                  ? config.mode === 'google-agy-oauth'
                     ? 'Sign in with your Google account to use Antigravity models. Copy the code shown on the Antigravity callback page and paste it here. Paste only that code, never an access/refresh token or the address-bar URL. Uses the approved AGY OAuth client from a private local file; no agy executable is required.'
                     : 'Experimental secretless public-client login; Google acceptance is unverified. Copy the code shown on Antigravity callback page and paste it here. Do not paste access/refresh tokens. With a code alone, returned state cannot be checked; PKCE binding depends on the token server. This does not verify account identity or entitlement.'
                   : 'Authorize only with the configured service/client. Paste the full callback URL, including state and code; a code alone is not accepted. This does not verify account identity or entitlement.',

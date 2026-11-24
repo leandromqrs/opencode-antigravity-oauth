@@ -63,18 +63,18 @@ test('an aborted signal never publishes', async () => {
 });
 
 test('publishQuota is opt-in, local-mode only, and keeps the credential binding', () => {
-  const base = { mode: 'agy-local-oauth', authorizationAcknowledged: true };
+  const base = { mode: 'google-agy-oauth', authorizationAcknowledged: true };
   assert.equal(validateLocalOAuthConfiguration(base).publishQuota, undefined);
   assert.equal(validateLocalOAuthConfiguration({ ...base, publishQuota: false }).publishQuota, undefined);
   const enabled = validateLocalOAuthConfiguration({ ...base, publishQuota: true });
   assert.equal(enabled.publishQuota, true);
   assert.equal(binding(enabled), binding(validateLocalOAuthConfiguration(base)));
-  assert.throws(() => validatePublicOAuthConfiguration({ mode: 'agy-public-oauth', authorizationAcknowledged: true, publishQuota: true }), /agy-local-oauth/u);
+  assert.throws(() => validatePublicOAuthConfiguration({ mode: 'agy-public-oauth', authorizationAcknowledged: true, publishQuota: true }), /google-agy-oauth/u);
   assert.throws(() => validateLocalOAuthConfiguration({ ...base, publishQuota: 'yes' }), /publishQuota/u);
 });
 
 test('local plugin publishes account quota through the receiver without a bridge', async () => {
-  const options = { mode: 'agy-local-oauth', authorizationAcknowledged: true, publishQuota: true };
+  const options = { mode: 'google-agy-oauth', authorizationAcknowledged: true, publishQuota: true };
   const config = validateLocalOAuthConfiguration(options);
   const credential = { type: 'oauth', methodID: 'configured-pkce', access: 'synthetic-access', refresh: '', expires: Date.now() + 3600000, metadata: { configuration: binding(config), issuer: config.oauth.issuer } };
   const publications = [];

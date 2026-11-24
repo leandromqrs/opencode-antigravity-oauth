@@ -8,7 +8,7 @@ import { binding, validateLocalOAuthConfiguration } from '../dist/configured-sec
 import { model } from '../dist/configured-driver.js';
 import { make } from '@opencode/ai';
 
-const options = { mode: 'agy-local-oauth', authorizationAcknowledged: true };
+const options = { mode: 'google-agy-oauth', authorizationAcknowledged: true };
 const config = validateLocalOAuthConfiguration(options);
 const credential = { type: 'oauth', methodID: 'configured-pkce', access: 'synthetic-access', refresh: '', expires: Date.now() + 3600000, metadata: { configuration: binding(config), issuer: config.oauth.issuer } };
 async function host(fetch, initial = 'A', now = Date.now) {

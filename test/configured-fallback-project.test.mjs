@@ -9,7 +9,7 @@ import { binding, validateLocalOAuthConfiguration } from '../dist/configured-sec
 
 test('403 fallback retains the validated project for inference without exposing it in diagnostics', async () => {
   const project = 'synthetic-private-project';
-  const options = { mode: 'agy-local-oauth', authorizationAcknowledged: true };
+  const options = { mode: 'google-agy-oauth', authorizationAcknowledged: true };
   const config = validateLocalOAuthConfiguration(options);
   const credential = { type: 'oauth', methodID: 'configured-pkce', access: 'synthetic-access', refresh: '', expires: Date.now() + 3600000, metadata: { configuration: binding(config), issuer: config.oauth.issuer } };
   let inferenceBody;

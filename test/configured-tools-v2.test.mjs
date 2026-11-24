@@ -9,7 +9,7 @@ import { binding, validateLocalOAuthConfiguration } from '../dist/configured-sec
 
 for (const fallback of [false, true]) {
   test(`V2 local ${fallback ? 'fallback' : 'discovery'} publishes tools and dispatches tool requests to the driver`, async () => {
-    const config = validateLocalOAuthConfiguration({ mode: 'agy-local-oauth', authorizationAcknowledged: true });
+    const config = validateLocalOAuthConfiguration({ mode: 'google-agy-oauth', authorizationAcknowledged: true });
     const credential = { type: 'oauth', methodID: 'configured-pkce', access: 'synthetic-access', refresh: '', expires: Date.now() + 3600000,
       metadata: { configuration: binding(config), issuer: config.oauth.issuer } };
     let published, request;
@@ -22,7 +22,7 @@ for (const fallback of [false, true]) {
       request = JSON.parse(init.body);
       return new Response(`data: ${JSON.stringify({ response: { candidates: [{ content: { parts: [{ functionCall: { id: 'c1', name: 'lookup_tool', args: { query: 'x' } } }] }, finishReason: 'STOP' }] } })}\n\n`);
     };
-    const cleanup = await createLocalAntigravityOAuthPlugin({ mode: 'agy-local-oauth', authorizationAcknowledged: true }, { fetch }).setup({
+    const cleanup = await createLocalAntigravityOAuthPlugin({ mode: 'google-agy-oauth', authorizationAcknowledged: true }, { fetch }).setup({
       integration: { transform: async cb => { await cb({ method: { update() {} }, update() {} }); return { dispose: async () => {} }; },
         connection: { active: async () => ({ type: 'credential', id: 'A', method: 'oauth' }), resolve: async () => credential } },
       event: providerHost.event, provider: providerHost.provider,

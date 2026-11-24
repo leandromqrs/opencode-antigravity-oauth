@@ -38,7 +38,7 @@ The plugin connects your Antigravity account to OpenCode with OAuth PKCE, discov
    {
      "package": "/absolute/path/to/opencode-google-antigravity-oauth",
      "options": {
-       "mode": "agy-local-oauth",
+       "mode": "google-agy-oauth",
        "authorizationAcknowledged": true,
        "publishQuota": true
      }
@@ -48,7 +48,7 @@ The plugin connects your Antigravity account to OpenCode with OAuth PKCE, discov
 ## Sign in
 
 ```sh
-opencode auth login agy-local-oauth --method configured-pkce
+opencode auth login google-agy-oauth --method configured-pkce
 ```
 
 Open the authorization URL, sign in with your Google account, and paste the code shown on the Antigravity callback page. Paste only that code, never an access or refresh token and never the address-bar URL.
@@ -59,7 +59,7 @@ Options:
 
 | Option | Meaning |
 | --- | --- |
-| `mode` | `agy-local-oauth` for the consumer-client integration. `agy-public-oauth` is an experimental secretless login, unverified by Google. |
+| `mode` | `google-agy-oauth` for the consumer-client integration. `agy-public-oauth` is an experimental secretless login, unverified by Google. |
 | `authorizationAcknowledged` | Must be `true`; records your acceptance of the account risk. |
 | `publishQuota` | `true` publishes the account quota to OpenCode Quota. Local mode only. |
 | `quotaBridge` | Legacy loopback HTTP bridge (`port`, `apiKeyEnv`, `autoKey`, `shared`). Prefer `publishQuota`. |

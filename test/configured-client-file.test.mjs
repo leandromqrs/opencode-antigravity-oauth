@@ -26,7 +26,7 @@ for (const binary of ['absent', 'unrecognized']) {
         import { createOAuthClient } from ${JSON.stringify(oauth)};
         import { validateLocalOAuthConfiguration } from ${JSON.stringify(security)};
         let requests = 0;
-        const client = createOAuthClient(validateLocalOAuthConfiguration({ mode: 'agy-local-oauth', authorizationAcknowledged: true }), {
+        const client = createOAuthClient(validateLocalOAuthConfiguration({ mode: 'google-agy-oauth', authorizationAcknowledged: true }), {
           fetch: async (url, init) => {
             const form = new URLSearchParams(init.body);
             assert.equal(url, 'https://oauth2.googleapis.com/token');

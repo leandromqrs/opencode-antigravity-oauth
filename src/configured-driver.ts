@@ -47,7 +47,7 @@ export function model(modelID: string, settings: Record<string, unknown>): Langu
     for (const key of ['headers', 'body']) if (input[key] !== undefined && Object.keys(record(input[key], [])).length) rejectConfigured();
     const http = createHTTP(runtime.fetch);
     return createOfflineModel({ provider: config.providerId, model: wire, ...(config.inference.project === '' && !('inference' in runtime.config) ? {} : { project: config.inference.project }),
-      ...('mode' in runtime.config && runtime.config.mode === 'agy-local-oauth' ? { localIdentity: true } : {}),
+      ...('mode' in runtime.config && runtime.config.mode === 'google-agy-oauth' ? { localIdentity: true } : {}),
       requestId: () => randomUUID(), textSemantics: config.inference.textSemantics, usageSemantics: config.inference.usageSemantics,
       transport: async function* (body, signal, options) {
         try {
@@ -56,7 +56,7 @@ export function model(modelID: string, settings: Record<string, unknown>): Langu
           const credential = await runtime.credential(connection);
           if (bounded.aborted) rejectConfigured();
           if (runtime.configuration && runtime.configuration(connection) !== config) rejectConfigured();
-          yield* http.stream(config.inference.endpoint, body, credential.access, bounded, 'mode' in runtime.config && runtime.config.mode === 'agy-local-oauth', options?.timeout);
+          yield* http.stream(config.inference.endpoint, body, credential.access, bounded, 'mode' in runtime.config && runtime.config.mode === 'google-agy-oauth', options?.timeout);
         } catch (error) { if (error instanceof OfflineInferenceError) throw error; rejectConfigured(); }
       },
     });

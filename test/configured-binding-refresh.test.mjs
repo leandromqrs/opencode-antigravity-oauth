@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createLocalAntigravityOAuthPlugin } from '../dist/configured-plugin.js';
 import { binding, validateLocalOAuthConfiguration } from '../dist/configured-security.js';
 
-const options = { mode: 'agy-local-oauth', authorizationAcknowledged: true };
+const options = { mode: 'google-agy-oauth', authorizationAcknowledged: true };
 const config = validateLocalOAuthConfiguration(options);
 const loadEndpoint = 'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
 const modelsEndpoint = 'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels';

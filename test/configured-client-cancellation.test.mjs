@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createOAuthClient } from '../dist/configured-oauth.js';
 import { binding, validateLocalOAuthConfiguration } from '../dist/configured-security.js';
 
-const config = validateLocalOAuthConfiguration({ mode: 'agy-local-oauth', authorizationAcknowledged: true });
+const config = validateLocalOAuthConfiguration({ mode: 'google-agy-oauth', authorizationAcknowledged: true });
 
 test('closing OAuth rejects a pending client configuration read before it resolves', { timeout: 1000 }, async () => {
   const keepAlive = setTimeout(() => {}, 1000);

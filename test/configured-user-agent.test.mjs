@@ -32,7 +32,7 @@ test('local OAuth inference uses CLI 1.5.8 without changing quota, catalog or ot
   const previous = process.env.OPENCODE_AGY_CLI_VERSION;
   delete process.env.OPENCODE_AGY_CLI_VERSION;
   try {
-    const init = await infer('agy-local-oauth');
+    const init = await infer('google-agy-oauth');
     const platform = os.platform() === 'win32' ? 'windows' : os.platform();
     const arch = os.arch() === 'x64' ? 'amd64' : os.arch();
     assert.deepEqual(init.headers, { Authorization: 'Bearer fixture-access', 'Content-Type': 'application/json', Accept: 'text/event-stream', 'User-Agent': `antigravity/cli/1.5.8 ${platform}/${arch}` });
@@ -60,7 +60,7 @@ test('local OAuth inference uses CLI 1.5.8 without changing quota, catalog or ot
 test('local OAuth inference honors the reference CLI version override', async () => {
   const previous = process.env.OPENCODE_AGY_CLI_VERSION;
   process.env.OPENCODE_AGY_CLI_VERSION = ' 2.3.4 ';
-  try { assert.match((await infer('agy-local-oauth')).headers['User-Agent'], /^antigravity\/cli\/2\.3\.4 /); }
+  try { assert.match((await infer('google-agy-oauth')).headers['User-Agent'], /^antigravity\/cli\/2\.3\.4 /); }
   finally { if (previous === undefined) delete process.env.OPENCODE_AGY_CLI_VERSION; else process.env.OPENCODE_AGY_CLI_VERSION = previous; }
 });
 
@@ -69,7 +69,7 @@ test('blank CLI version overrides retain distinct inference and shared defaults'
   try {
     for (const version of ['', '   ']) {
       process.env.OPENCODE_AGY_CLI_VERSION = version;
-      assert.match((await infer('agy-local-oauth')).headers['User-Agent'], /^antigravity\/cli\/1\.5\.8 /);
+      assert.match((await infer('google-agy-oauth')).headers['User-Agent'], /^antigravity\/cli\/1\.5\.8 /);
       assert.match(localCliUserAgent(), /^antigravity\/cli\/1\.4\.11 /);
     }
   } finally { if (previous === undefined) delete process.env.OPENCODE_AGY_CLI_VERSION; else process.env.OPENCODE_AGY_CLI_VERSION = previous; }
@@ -83,7 +83,7 @@ test('manual and public configurations do not receive the local CLI user agent',
 });
 
 test('only local OAuth inference includes the agent request identity in its JSON wrapper', async () => {
-  const local = JSON.parse((await infer('agy-local-oauth')).body);
+  const local = JSON.parse((await infer('google-agy-oauth')).body);
   assert.equal(local.userAgent, 'antigravity');
   assert.equal(local.requestType, 'agent');
   for (const mode of ['manual', 'agy-public-oauth']) {
@@ -99,7 +99,7 @@ test('unsafe or oversized CLI version overrides are rejected before HTTP dispatc
     for (const version of ['1.2\r\nInjected: value', '1.2\n', '1.2\u0001', 'x'.repeat(257)]) {
       process.env.OPENCODE_AGY_CLI_VERSION = version;
       let calls = 0;
-      await assert.rejects(infer('agy-local-oauth', () => { calls++; }));
+      await assert.rejects(infer('google-agy-oauth', () => { calls++; }));
       assert.equal(calls, 0);
     }
   } finally { if (previous === undefined) delete process.env.OPENCODE_AGY_CLI_VERSION; else process.env.OPENCODE_AGY_CLI_VERSION = previous; }

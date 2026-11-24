@@ -18,7 +18,7 @@ export interface PublicOAuthConfiguration extends OAuthConfiguration {
   mode: 'agy-public-oauth';
 }
 export interface LocalOAuthConfiguration extends OAuthConfiguration {
-  mode: 'agy-local-oauth';
+  mode: 'google-agy-oauth';
   quotaBridge?: { port: number; apiKeyEnv: string; autoKey: boolean; shared: boolean };
   publishQuota?: true;
 }
@@ -36,7 +36,7 @@ class QuotaPublicationOptionError extends Error {}
 
 function publishQuotaOption(value: unknown, mode: PresetOAuthConfiguration['mode']): true | undefined {
   if (value === undefined || value === false) return undefined;
-  if (mode !== 'agy-local-oauth') throw new QuotaPublicationOptionError('Antigravity publishQuota is available only in agy-local-oauth mode.');
+  if (mode !== 'google-agy-oauth') throw new QuotaPublicationOptionError('Antigravity publishQuota is available only in google-agy-oauth mode.');
   if (value !== true) throw new QuotaPublicationOptionError('Antigravity publishQuota must be true.');
   return true;
 }
@@ -51,7 +51,7 @@ function optionLabel(key: string | symbol): string {
 
 function quotaBridgeOption(value: unknown, mode: PresetOAuthConfiguration['mode']): { port: number; apiKeyEnv: string; autoKey: boolean; shared: boolean } | undefined {
   if (value === undefined || value === false) return undefined;
-  if (mode !== 'agy-local-oauth') throw new QuotaBridgeOptionError('Antigravity quotaBridge is available only in agy-local-oauth mode.');
+  if (mode !== 'google-agy-oauth') throw new QuotaBridgeOptionError('Antigravity quotaBridge is available only in google-agy-oauth mode.');
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
     throw new QuotaBridgeOptionError('Antigravity quotaBridge requires port and apiKeyEnv.');
   }
@@ -189,7 +189,7 @@ function validatePresetOAuthConfiguration<M extends PresetOAuthConfiguration['mo
     const quotaBridge = quotaBridgeOption(options.quotaBridge, mode);
     const publishQuota = publishQuotaOption(options.publishQuota, mode);
     return Object.freeze({ mode, authorizationAcknowledged: true,
-      integrationId: mode, name: mode === 'agy-local-oauth' ? 'Google Antigravity' : 'Antigravity public OAuth (experimental, login only)',
+      integrationId: mode, name: mode === 'google-agy-oauth' ? 'Google Antigravity' : 'Antigravity public OAuth (experimental, login only)',
       ...(quotaBridge ? { quotaBridge } : {}),
       ...(publishQuota ? { publishQuota } : {}),
       oauth: Object.freeze({ issuer: 'https://accounts.google.com', authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -197,7 +197,7 @@ function validatePresetOAuthConfiguration<M extends PresetOAuthConfiguration['mo
         clientId: AGY_CONSUMER_CLIENT_ID,
         redirectUri: 'https://antigravity.google/oauth-callback',
         scopes: Object.freeze([...['cloud-platform', 'userinfo.email', 'userinfo.profile', 'cclog', 'experimentsandconfigs'].map(scope => `https://www.googleapis.com/auth/${scope}`),
-          ...(mode === 'agy-local-oauth' ? ['https://www.googleapis.com/auth/aicode', 'openid'] : [])]),
+          ...(mode === 'google-agy-oauth' ? ['https://www.googleapis.com/auth/aicode', 'openid'] : [])]),
       }),
     });
   } catch (error) { if (error instanceof QuotaBridgeOptionError || error instanceof QuotaPublicationOptionError) throw error; return rejectConfigured(); }
@@ -208,14 +208,14 @@ export function validatePublicOAuthConfiguration(value: unknown): PublicOAuthCon
 }
 
 export function validateLocalOAuthConfiguration(value: unknown): LocalOAuthConfiguration {
-  return validatePresetOAuthConfiguration(value, 'agy-local-oauth');
+  return validatePresetOAuthConfiguration(value, 'google-agy-oauth');
 }
 
 export function validateProductionConfiguration(value: unknown): Configuration | PresetOAuthConfiguration {
   const mode = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'mode') : undefined;
   if (mode && 'value' in mode) {
     if (mode.value === 'agy-public-oauth') return validatePublicOAuthConfiguration(value);
-    if (mode.value === 'agy-local-oauth') return validateLocalOAuthConfiguration(value);
+    if (mode.value === 'google-agy-oauth') return validateLocalOAuthConfiguration(value);
   }
   return validateConfiguration(value);
 }

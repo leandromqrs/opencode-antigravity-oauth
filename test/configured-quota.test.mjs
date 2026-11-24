@@ -39,7 +39,7 @@ function catalogFetch(summary) {
 
 async function quotaPlugin({ port, bridge = true, active = 'A' } = {}) {
   const quotaBridge = bridge === false ? undefined : { port, apiKeyEnv, ...(bridge === true ? {} : bridge) };
-  const options = { mode: 'agy-local-oauth', authorizationAcknowledged: true, ...(quotaBridge ? { quotaBridge } : {}) };
+  const options = { mode: 'google-agy-oauth', authorizationAcknowledged: true, ...(quotaBridge ? { quotaBridge } : {}) };
   const config = validateLocalOAuthConfiguration(options);
   const credential = { type: 'oauth', methodID: 'configured-pkce', access: 'synthetic-access', refresh: '', expires: Date.now() + 3600000, metadata: { configuration: binding(config), issuer: config.oauth.issuer } };
   const { calls: quotaCalls, fetch: stubFetch } = catalogFetch(() => Response.json({ buckets: [{ displayName: 'Weekly limit', window: 'weekly', remainingFraction: 0.75 }] }));
@@ -165,7 +165,7 @@ test('remote names that truncate identically are deduplicated without looping', 
 });
 
 test('quotaBridge option is validated by the local preset and rejected anywhere else', () => {
-  const local = { mode: 'agy-local-oauth', authorizationAcknowledged: true };
+  const local = { mode: 'google-agy-oauth', authorizationAcknowledged: true };
   const bridge = { port: 62368, apiKeyEnv: 'ANTIGRAVITY_QUOTA_BRIDGE_KEY' };
   assert.deepEqual(validateLocalOAuthConfiguration({ ...local, quotaBridge: bridge }).quotaBridge, { ...bridge, autoKey: true, shared: false });
   assert.equal(Object.isFrozen(validateLocalOAuthConfiguration({ ...local, quotaBridge: bridge }).quotaBridge), true);
@@ -185,7 +185,7 @@ test('quotaBridge option is validated by the local preset and rejected anywhere 
   try { validateLocalOAuthConfiguration({ ...local, quotaBridge: { ...bridge, '\u001b[2Jevil': 1 } }); } catch (error) { message = error.message; }
   assert.match(message, /does not accept the option/);
   assert.equal(/[\u001b\u0000\n\r]/.test(message), false);
-  assert.throws(() => validatePublicOAuthConfiguration({ mode: 'agy-public-oauth', authorizationAcknowledged: true, quotaBridge: bridge }), /only in agy-local-oauth mode/);
+  assert.throws(() => validatePublicOAuthConfiguration({ mode: 'agy-public-oauth', authorizationAcknowledged: true, quotaBridge: bridge }), /only in google-agy-oauth mode/);
   assert.throws(() => validateLocalOAuthConfiguration({ ...local, quotaBridge: bridge, extra: 1 }));
 });
 
@@ -263,7 +263,7 @@ test('a credential switch drops the cached quota result', async () => {
     await h.call();
     await h.call();
     assert.equal(h.quotaCalls.count, 1);
-    await h.emit('credential.switched', { integrationID: 'agy-local-oauth' });
+    await h.emit('credential.switched', { integrationID: 'google-agy-oauth' });
     assert.equal((await h.call()).status, 200);
     assert.equal(h.quotaCalls.count, 2);
   } finally { await h.cleanup(); }

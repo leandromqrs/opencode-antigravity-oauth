@@ -9,7 +9,7 @@ import { make } from '@opencode/ai';
 import { Model, Provider } from '@opencode/plugin';
 import { Schema } from 'effect';
 
-const options = { mode: 'agy-local-oauth', authorizationAcknowledged: true };
+const options = { mode: 'google-agy-oauth', authorizationAcknowledged: true };
 const config = validateLocalOAuthConfiguration(options);
 const selected = id => ({ type: 'credential', id, method: 'oauth' });
 const credential = () => ({ type: 'oauth', methodID: 'configured-pkce', access: 'synthetic-access', refresh: '', expires: Date.now() + 3600000,
@@ -219,7 +219,7 @@ test('catalog bounds response bytes and rejects redirects and malformed JSON', a
 });
 
 test('native local provider uses existing credential binding and singleflight cache', async () => {
-  assert.equal(binding(config), 'ff8bf766f5408bd56343805747f4d583789f72c4cdc0c035c4d501ee1f183a6f');
+  assert.equal(binding(config), 'bb7d372c5b743ae4977b2deb4b2a7d7b6bb8d37cddb755f6daca3cff631cba84');
   let n = 0;
   const h = await host(async () => Response.json(++n % 2 ? { cloudaicompanionProject: 'fixture-project' } : catalog()));
   await Promise.all([h.run(), h.run()]); await h.run();

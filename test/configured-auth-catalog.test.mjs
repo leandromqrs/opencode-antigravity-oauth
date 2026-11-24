@@ -35,7 +35,7 @@ async function setup(t) {
   const state = { active: undefined, afterResolve: undefined, afterLoad: undefined };
   const providerHost = createProviderHost(value => { added.push(value); });
   const persist = value => { accounts.set(state.active.id, value); return value; };
-  const cleanup = await createLocalAntigravityOAuthPlugin({ mode: 'agy-local-oauth', authorizationAcknowledged: true }, {
+  const cleanup = await createLocalAntigravityOAuthPlugin({ mode: 'google-agy-oauth', authorizationAcknowledged: true }, {
     now: () => now,
     loadLocalClientSecret: async () => clientSecret,
     fetch: async (url, init) => {

@@ -11,7 +11,7 @@ export function createOAuthClient(config: Configuration | PresetOAuthConfigurati
   const boundary = binding(config), methodID = Integration.MethodID.make('configured-pkce');
   const controller = new AbortController();
   const pending = new Set<() => void>(), refreshing = new Map<string, Promise<Credential.OAuth>>();
-  const localClient = 'mode' in config && config.mode === 'agy-local-oauth';
+  const localClient = 'mode' in config && config.mode === 'google-agy-oauth';
   function assertCredential(value: Credential.OAuth): void {
     if (localClient && value.type === 'oauth' && value.metadata?.configuration !== boundary) throw new PublicOAuthDiagnostic('credential_binding', 'reauthorization_required', undefined, undefined, true);
     if (value.type !== 'oauth' || value.methodID !== methodID || value.metadata?.configuration !== boundary || value.metadata?.issuer !== config.oauth.issuer) rejectConfigured();
