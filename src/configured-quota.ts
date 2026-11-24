@@ -10,8 +10,9 @@ const maxReplyBytes = 65536;
 const maxEntries = 64;
 
 interface PercentEntry { kind: 'percent'; name: string; resultType: 'quota'; percentRemaining: number; label?: string; resetTimeIso?: string; observedAtIso: string }
-interface StatusEntry { kind: 'value'; name: string; resultType: 'status'; value: string; observedAtIso: string }
+interface StatusEntry { kind: 'value'; name: string; resultType: 'status'; value: string; label?: string; observedAtIso: string }
 export interface QuotaV1 { version: 'quota-v1'; entries: (PercentEntry | StatusEntry)[] }
+export interface AccountQuota { account: string; quota: QuotaV1 }
 
 function displayText(value: unknown, max: number): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -77,6 +78,61 @@ export function quotaV1FromSummary(summary: unknown, observedAt: string): QuotaV
   }
   if (!entries.length) return unavailableQuotaV1(observedAt);
   return { version: 'quota-v1', entries };
+}
+
+function clipPoints(value: string, max: number): string {
+  const points = [...value];
+  return points.length <= max ? value : points.slice(0, max).join('');
+}
+
+export function quotaV1ForAccounts(accounts: AccountQuota[], observedAt: string): QuotaV1 {
+  if (!accounts.length) return unavailableQuotaV1(observedAt);
+  if (accounts.length === 1) return accounts[0]!.quota;
+  const entries: QuotaV1['entries'] = [];
+  accounts.forEach(({ account, quota }, index) => {
+    const tag = account || `conta ${index + 1}`;
+    const suffix = ` [${index + 1}]`;
+    const room = 80 - [...suffix].length;
+    for (const entry of quota.entries) {
+      if (entries.length >= maxEntries) break;
+      const name = clipPoints(entry.name, room) + suffix;
+      const label = clipPoints(`${entry.label ?? entry.name} — ${tag}`, 80);
+      entries.push({ ...entry, name, label });
+    }
+  });
+  return entries.length ? { version: 'quota-v1', entries } : unavailableQuotaV1(observedAt);
+}
+
+export async function fetchAccountEmail(fetcher: Fetch, access: string, signal: AbortSignal): Promise<string | undefined> {
+  if (!/^[\x21-\x7e]{1,32768}$/u.test(access)) return undefined;
+  const bounded = AbortSignal.any([signal, AbortSignal.timeout(10000)]);
+  const url = 'https://www.googleapis.com/oauth2/v3/userinfo';
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    const response = await fetcher(url, { method: 'GET',
+      headers: { Authorization: `Bearer ${access}`, Accept: 'application/json', 'User-Agent': localCliUserAgent() },
+      redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', signal: bounded });
+    if (bounded.aborted || !response.ok || response.redirected || response.url && response.url !== url) {
+      void response.body?.cancel().catch(() => {});
+      return undefined;
+    }
+    reader = response.body?.getReader();
+    if (!reader) return undefined;
+    const chunks: Uint8Array[] = []; let bytes = 0;
+    for (;;) {
+      const part = await reader.read();
+      if (bounded.aborted) return undefined;
+      if (part.done) break;
+      bytes += part.value.byteLength;
+      if (bytes > maxReplyBytes) return undefined;
+      chunks.push(part.value);
+    }
+    const email = displayText(object(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))))?.email, 120);
+    return email && email.includes('@') ? email : undefined;
+  } catch { return undefined; }
+  finally {
+    try { reader?.releaseLock(); } catch { /* reader may outlive cancellation */ }
+  }
 }
 
 export async function fetchQuotaSummary(fetcher: Fetch, access: string, project: string, signal: AbortSignal): Promise<unknown> {

@@ -1,6 +1,6 @@
 import { Plugin, Provider, Integration, type Credential } from '@opencode/plugin';
 import { createOAuthClient, type OAuthDependencies } from './configured-oauth.js';
-import { fetchQuotaSummary, quotaV1FromSummary, unavailableQuotaV1, type QuotaV1 } from './configured-quota.js';
+import { fetchAccountEmail, fetchQuotaSummary, quotaV1ForAccounts, quotaV1FromSummary, unavailableQuotaV1, type AccountQuota, type QuotaV1 } from './configured-quota.js';
 import { acquireQuotaBridge } from './configured-quota-bridge-plugin.js';
 import { quotaReceiver, startQuotaPublication } from './configured-quota-publication.js';
 import { registerConfiguredRuntime } from './configured-driver.js';
@@ -82,23 +82,64 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
       const assertSelection = async (expected: string) => {
         if (disposed || await selection() !== expected || disposed) rejectConfigured();
       };
+      const quotaProjects = new Map<string, { project: string; expires: number }>();
+      const accountEmails = new Map<string, string>();
+      const emailByAccess = new Map<string, string>();
+      type QuotaConnection = { type: 'credential'; id: string; label: string; method: 'oauth' };
+      const quotaConnections = async (): Promise<QuotaConnection[]> => {
+        try {
+          const info = await ctx.integration.get({ integrationID: Integration.ID.make(config.integrationId) });
+          type Listed = Integration.Info['connections'][number];
+          const listed = (info?.data?.connections ?? []).filter((connection): connection is Extract<Listed, { type: 'credential' }> =>
+            connection.type === 'credential' && connection.method === 'oauth');
+          if (listed.length) return listed.map(connection => ({ type: 'credential' as const, id: connection.id, label: connection.label, method: 'oauth' as const }))
+            .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+        } catch { /* host without integration.get: fall back to the active connection */ }
+        const current = await ctx.integration.connection.active(config.integrationId);
+        return current?.type === 'credential' && current.method === 'oauth' ? [{ type: 'credential', id: current.id, label: current.label, method: 'oauth' }] : [];
+      };
+      const quotaCredential = async (connection: QuotaConnection): Promise<Credential.OAuth> => {
+        const resolved = await ctx.integration.connection.resolve(connection);
+        if (disposed || !resolved || resolved.type !== 'oauth') throw new Error('Quota unavailable.');
+        if (local && resolved.metadata?.configuration !== binding(config)) throw new Error('Quota unavailable.');
+        if (!oauth.accepts(resolved)) throw new Error('Quota unavailable.');
+        return resolved;
+      };
+      const accountEmail = async (id: string, access: string, signal: AbortSignal): Promise<string> => {
+        const cached = accountEmails.get(id);
+        if (cached !== undefined) return cached;
+        const email = await fetchAccountEmail(dependencies.fetch, access, signal);
+        if (email) { accountEmails.set(id, email); emailByAccess.set(access, email); }
+        return email ?? '';
+      };
       const getQuota = async (signal: AbortSignal): Promise<QuotaV1> => {
         const observed = () => new Date(now()).toISOString();
         if (disposed) return unavailableQuotaV1(observed());
         if (quotaCache && quotaCache.expires > now()) return quotaCache.value;
         if (quotaPending) return quotaPending;
         const operation = (async (): Promise<QuotaV1> => {
-          const current = await ctx.integration.connection.active(config.integrationId);
-          if (disposed || !current || current.type !== 'credential' || current.method !== 'oauth') return unavailableQuotaV1(observed());
-          const resolved = await credential(current.id);
-          const inventory = inventories.get(current.id);
-          let project = inventory && inventory.expires > now() ? inventory.config.inference.project : '';
-          if (!project && !disposed) {
-            const selected = JSON.stringify([current.type, current.id, current.method]);
-            project = (await catalog.discover(resolved.access, () => assertSelection(selected))).project ?? '';
+          const connections = await quotaConnections();
+          if (disposed || !connections.length) return unavailableQuotaV1(observed());
+          const accounts: AccountQuota[] = [];
+          for (const connection of connections) {
+            if (disposed) break;
+            let account = accountEmails.get(connection.id) ?? '';
+            try {
+              const resolved = await quotaCredential(connection);
+              const inventory = inventories.get(connection.id);
+              const cachedProject = quotaProjects.get(connection.id);
+              let project = inventory && inventory.expires > now() ? inventory.config.inference.project
+                : cachedProject && cachedProject.expires > now() ? cachedProject.project : '';
+              if (!project && !disposed) {
+                project = (await catalog.discover(resolved.access, async () => { if (disposed) rejectConfigured(); })).project ?? '';
+                if (project) quotaProjects.set(connection.id, { project, expires: now() + 60_000 });
+              }
+              account = await accountEmail(connection.id, resolved.access, signal);
+              if (!project) { accounts.push({ account, quota: unavailableQuotaV1(observed()) }); continue; }
+              accounts.push({ account, quota: quotaV1FromSummary(await fetchQuotaSummary(dependencies.fetch, resolved.access, project, signal), observed()) });
+            } catch { accounts.push({ account, quota: unavailableQuotaV1(observed()) }); }
           }
-          if (!project) return unavailableQuotaV1(observed());
-          return quotaV1FromSummary(await fetchQuotaSummary(dependencies.fetch, resolved.access, project, signal), observed());
+          return quotaV1ForAccounts(accounts, observed());
         })().catch(() => unavailableQuotaV1(observed()));
         quotaPending = operation;
         try {
@@ -147,7 +188,7 @@ function configuredPlugin(config: Configuration | PresetOAuthConfiguration, depe
               const refreshed = await oauth.refresh(credential);
               await assertSelection(selected);
               return refreshed;
-            }, label: () => config.name,
+            }, label: credential => emailByAccess.get(credential?.access ?? '') ?? config.name,
           });
           editor.update(config.integrationId, value => { value.name = config.name; });
         }));

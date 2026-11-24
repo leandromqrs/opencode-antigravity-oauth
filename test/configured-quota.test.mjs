@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import { test } from 'node:test';
-import { quotaV1FromSummary, unavailableQuotaV1, fetchQuotaSummary, startQuotaBridge } from '../dist/configured-quota.js';
+import { quotaV1FromSummary, unavailableQuotaV1, fetchQuotaSummary, fetchAccountEmail, quotaV1ForAccounts, startQuotaBridge } from '../dist/configured-quota.js';
 import { binding, validateLocalOAuthConfiguration, validatePublicOAuthConfiguration } from '../dist/configured-security.js';
 import { createLocalAntigravityOAuthPlugin } from '../dist/configured-plugin.js';
 import { createProviderHost } from './helpers/provider-host.mjs';
@@ -11,6 +11,7 @@ const observedAt = '2026-11-14T12:00:00.000Z';
 const loadEndpoint = 'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
 const modelsEndpoint = 'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels';
 const quotaEndpoint = 'https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary';
+const userinfoEndpoint = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const apiKeyEnv = 'ANTIGRAVITY_QUOTA_TEST_KEY';
 const bridgeUrl = port => `http://127.0.0.1:${port}/quota`;
 
@@ -29,6 +30,7 @@ function catalogFetch(summary) {
     if (url === loadEndpoint) return Response.json({ cloudaicompanionProject: 'synthetic-project' });
     if (url === modelsEndpoint) return Response.json({ defaultAgentModelId: 'synthetic-chat', models: { 'synthetic-chat': { displayName: 'Synthetic chat', maxTokens: 8192, maxOutputTokens: 2048 } } });
     if (url === quotaEndpoint) { calls.count++; return summary(); }
+    if (url === userinfoEndpoint) return Response.json({ email: 'synthetic@example.com' });
     calls.unhandled.push(url);
     return new Response('', { status: 599 });
   };
@@ -323,4 +325,61 @@ test('a busy quota port warns, leaves the environment untouched and keeps OAuth 
     assert.equal(process.env[apiKeyEnv], previous);
     await release();
   }
+});
+
+const idle = () => new AbortController().signal;
+
+test('fetchAccountEmail reads the verified account email from Google userinfo', async () => {
+  const seen = [];
+  const fetch = async (url, init) => {
+    seen.push({ url, authorization: new Headers(init.headers).get('authorization') });
+    return Response.json({ email: 'user@example.com', email_verified: true });
+  };
+  assert.equal(await fetchAccountEmail(fetch, token, idle()), 'user@example.com');
+  assert.deepEqual(seen, [{ url: userinfoEndpoint, authorization: `Bearer ${token}` }]);
+});
+
+test('fetchAccountEmail degrades to undefined without leaking failures', async () => {
+  assert.equal(await fetchAccountEmail(async () => Response.json({ email: 'user@example.com' }), '', idle()), undefined);
+  assert.equal(await fetchAccountEmail(async () => Response.json({ email: 'user@example.com' }), 'bad token', idle()), undefined);
+  assert.equal(await fetchAccountEmail(async () => new Response('', { status: 401 }), token, idle()), undefined);
+  assert.equal(await fetchAccountEmail(async () => Response.json({ email: 42 }), token, idle()), undefined);
+  assert.equal(await fetchAccountEmail(async () => Response.json({ sub: 'no-email' }), token, idle()), undefined);
+  assert.equal(await fetchAccountEmail(async () => Response.json({ email: 'x'.repeat(65536) + '@example.com' }), token, idle()), undefined);
+  assert.equal(await fetchAccountEmail(async () => { throw Error('secret-network'); }, token, idle()), undefined);
+  const controller = new AbortController();
+  controller.abort();
+  assert.equal(await fetchAccountEmail(async () => Response.json({ email: 'user@example.com' }), token, controller.signal), undefined);
+});
+
+test('quotaV1ForAccounts keeps a single account snapshot unchanged', () => {
+  const single = quotaV1FromSummary({ buckets: [{ displayName: 'Weekly limit', window: 'weekly', remainingFraction: 0.5 }] }, observedAt);
+  assert.equal(quotaV1ForAccounts([], observedAt).entries[0].resultType, 'status');
+  assert.equal(quotaV1ForAccounts([{ account: 'user@example.com', quota: single }], observedAt), single);
+});
+
+test('quotaV1ForAccounts scopes every row per account within the 80-code-point limits', () => {
+  const summary = fraction => quotaV1FromSummary({ groups: [{ displayName: 'Gemini Models', buckets: [{ displayName: 'Weekly limit', window: 'weekly', remainingFraction: fraction }] }] }, observedAt);
+  const merged = quotaV1ForAccounts([
+    { account: 'first@example.com', quota: summary(0.5) },
+    { account: 'second@example.com', quota: summary(0.25) },
+  ], observedAt);
+  assert.equal(merged.entries.length, 2);
+  assert.equal(new Set(merged.entries.map(entry => entry.name)).size, 2);
+  for (const entry of merged.entries) {
+    assert.ok([...entry.name].length <= 80);
+    assert.ok([...entry.label].length <= 80);
+  }
+  assert.ok(merged.entries.some(entry => entry.label.includes('first@example.com') && entry.percentRemaining === 50));
+  assert.ok(merged.entries.some(entry => entry.label.includes('second@example.com') && entry.percentRemaining === 25));
+  const anonymous = quotaV1ForAccounts([{ account: '', quota: summary(0.5) }, { account: '', quota: summary(0.25) }], observedAt);
+  assert.ok(anonymous.entries[0].label.includes('conta 1'));
+  assert.ok(anonymous.entries[1].label.includes('conta 2'));
+  const long = quotaV1ForAccounts([
+    { account: 'first@example.com', quota: { version: 'quota-v1', entries: [{ kind: 'percent', name: 'n'.repeat(76), resultType: 'quota', percentRemaining: 10, label: 'g'.repeat(80), observedAtIso: observedAt }] } },
+    { account: 'second@example.com', quota: unavailableQuotaV1(observedAt) },
+  ], observedAt);
+  assert.ok([...long.entries[0].name].length <= 80);
+  assert.ok([...long.entries[0].label].length <= 80);
+  assert.ok(long.entries.some(entry => entry.resultType === 'status' && entry.label.includes('second@example.com')));
 });
