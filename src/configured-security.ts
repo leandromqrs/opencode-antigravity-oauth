@@ -6,6 +6,7 @@ import { AGY_CONSUMER_CLIENT_ID } from './local-oauth-client.js';
 import { localCliUserAgent } from './configured-user-agent.js';
 import { inferenceDeadline, inferenceTimeout, type InferenceTimeout } from './inference-timeout.js';
 import { OfflineInferenceError, REQUEST_MAX_BYTES } from './offline-inference.js';
+import { isOfflineInferenceError } from './offline-error.js';
 
 export type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 export interface OAuthConfiguration {
@@ -397,7 +398,7 @@ export function createHTTP(fetcher: Fetch) {
         const response = await open(url, { method: 'POST', headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(localClient ? { 'User-Agent': configuredText(localCliUserAgent('1.5.8')) } : {}) }, body }, controller.signal, 'inference', localClient);
         clearHeaders();
         yield* read(response, controller.signal, 16 * 1_048_576, { controller, chunk: timeout?.chunk });
-      } catch (error) { if (error instanceof OfflineInferenceError) throw error; rejectConfigured(); }
+      } catch (error) { if (isOfflineInferenceError(error)) throw error; rejectConfigured(); }
       finally { clearHeaders(); clearTotal(); signal.removeEventListener('abort', cancel); controller.abort(); }
     },
   };

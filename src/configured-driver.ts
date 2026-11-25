@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 const offlineModule = await import(`./offline-opencode.js?runtime=${new URL(import.meta.url).searchParams.get('runtime') ?? ''}`) as typeof import('./offline-opencode.js');
-const { createOfflineModel, OfflineInferenceError } = offlineModule;
+const { createOfflineModel } = offlineModule;
 import { binding, createHTTP, record, rejectConfigured, type Configuration, type Fetch, type PresetOAuthConfiguration } from './configured-security.js';
 import { CatalogDiagnostic } from './configured-catalog.js';
+import { isOfflineInferenceError } from './offline-error.js';
 import type { LanguageModel } from '@opencode/ai';
 import type { Credential } from '@opencode/plugin';
 
@@ -57,7 +58,7 @@ export function model(modelID: string, settings: Record<string, unknown>): Langu
           if (bounded.aborted) rejectConfigured();
           if (runtime.configuration && runtime.configuration(connection) !== config) rejectConfigured();
           yield* http.stream(config.inference.endpoint, body, credential.access, bounded, 'mode' in runtime.config && runtime.config.mode === 'google-agy-oauth', options?.timeout);
-        } catch (error) { if (error instanceof OfflineInferenceError) throw error; rejectConfigured(); }
+        } catch (error) { if (isOfflineInferenceError(error)) throw error; rejectConfigured(); }
       },
     });
   } catch (error) { if (error instanceof CatalogDiagnostic) throw error; return rejectConfigured(); }

@@ -10,6 +10,7 @@ const inferenceModule = await import(`./offline-inference.js?runtime=${new URL(i
 const { buildInferenceRequest, inferOffline, OfflineInferenceError } = inferenceModule;
 export { OfflineInferenceError };
 import { inferenceTimeout, type InferenceTimeout } from './inference-timeout.js';
+import { isOfflineInferenceError } from './offline-error.js';
 
 export interface OfflineModelConfig {
   provider: string;
@@ -45,8 +46,8 @@ function neutralizeSystemText(text: string): string {
   return result;
 }
 function outputError(error?: unknown): AIError {
-  const code = error instanceof OfflineInferenceError && ['invalid', 'unsupported', 'remote', 'limit', 'truncated', 'closed', 'cancelled', 'transport'].includes(error.code) ? error.code : 'unsupported';
-  const stage = error instanceof OfflineInferenceError ? ['framing', 'response', 'native_usage', 'http_400', 'http_401', 'http_403', 'http_429', 'http_429_capacity', 'http_429_quota', 'http_429_rate', 'http_5xx', 'http_error'].includes(error.stage ?? '') ? error.stage : 'transport' : 'native_output';
+  const code = isOfflineInferenceError(error) && ['invalid', 'unsupported', 'remote', 'limit', 'truncated', 'closed', 'cancelled', 'transport'].includes(error.code) ? error.code : 'unsupported';
+  const stage = isOfflineInferenceError(error) ? ['framing', 'response', 'native_usage', 'http_400', 'http_401', 'http_403', 'http_429', 'http_429_capacity', 'http_429_quota', 'http_429_rate', 'http_5xx', 'http_error'].includes(error.stage ?? '') ? error.stage : 'transport' : 'native_output';
   return new AIError({ reason: new InvalidProviderOutputError({ message: `Offline model: invalid or unsupported stream (offline_code=${code} offline_stage=${stage})` }) });
 }
 
@@ -274,7 +275,7 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
   };
   try { buildInferenceRequest(input); } catch (error) {
     console.warn('Antigravity inference serialization rejected:', JSON.stringify({
-      code: error instanceof OfflineInferenceError ? error.code : 'unknown',
+      code: isOfflineInferenceError(error) ? error.code : 'unknown',
       contents: contents.length, tools: tools.length, bytes: Buffer.byteLength(JSON.stringify(input)),
     }));
     invalid('input_serialization');

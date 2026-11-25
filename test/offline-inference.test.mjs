@@ -203,3 +203,19 @@ test('cancellation still applies while an EOF tail chunk is suspended at the con
   controller.abort('secret');
   await assert.rejects(iterator.next(), code('cancelled'));
 });
+
+test('offline error identity survives separate module copies (per-runtime reload)', async () => {
+  const stable = await import('../dist/offline-error.js');
+  const copy = await import('../dist/offline-error.js?runtime=regression');
+  assert.notEqual(stable.OfflineInferenceError, copy.OfflineInferenceError);
+  const foreign = new copy.OfflineInferenceError('remote', 'http_400');
+  assert.equal(foreign instanceof stable.OfflineInferenceError, false);
+  assert.ok(stable.isOfflineInferenceError(foreign));
+  assert.ok(copy.isOfflineInferenceError(new stable.OfflineInferenceError('invalid')));
+  for (const value of [null, undefined, new Error('secret'), {}, { code: 'remote' }]) {
+    assert.equal(stable.isOfflineInferenceError(value), false);
+  }
+  // A transport failure raised by another module copy keeps its stage instead of flattening to transport.
+  const iterator = inferOffline(input(), async function* () { throw foreign; }, {});
+  await assert.rejects(iterator.next(), error => error.code === 'remote' && error.stage === 'http_400');
+});

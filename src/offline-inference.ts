@@ -1,5 +1,5 @@
 import { inferenceDeadline, inferenceTimeout, type InferenceTimeout } from './inference-timeout.js';
-import { OfflineInferenceError, type OfflineErrorCode } from './offline-error.js';
+import { OfflineInferenceError, isOfflineInferenceError, type OfflineErrorCode } from './offline-error.js';
 
 export { OfflineInferenceError };
 export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject;
@@ -236,7 +236,7 @@ export function createInferenceDecoder(): { push(bytes: Uint8Array): InferenceCh
     let raw: unknown; try { raw = JSON.parse(data); } catch { fail(); }
     let chunk: InferenceChunk;
     try { chunk = convertInferenceResponse(raw); }
-    catch (error) { throw new OfflineInferenceError(error instanceof OfflineInferenceError ? error.code : 'invalid', 'response'); }
+    catch (error) { throw new OfflineInferenceError(isOfflineInferenceError(error) ? error.code : 'invalid', 'response'); }
     if (terminal && chunk.candidates.length) fail('unsupported');
     if (chunk.candidates.some(candidate => candidate.finishReason && candidate.finishReason !== 'FINISH_REASON_UNSPECIFIED')) terminal = true;
     return chunk;
@@ -245,7 +245,7 @@ export function createInferenceDecoder(): { push(bytes: Uint8Array): InferenceCh
     if (closed) fail('closed');
     try { return run(); } catch (error) {
       closed = true; pending = 0; buffer.fill(0);
-      throw error instanceof OfflineInferenceError ? new OfflineInferenceError(error.code, error.stage ?? 'framing') : new OfflineInferenceError('invalid', 'framing');
+      throw isOfflineInferenceError(error) ? new OfflineInferenceError(error.code, error.stage ?? 'framing') : new OfflineInferenceError('invalid', 'framing');
     }
   }
   return {
@@ -329,8 +329,8 @@ export async function* inferOffline(input: unknown, transport: OfflineTransport,
       }
     }
   } catch (error) {
-    if (!(error instanceof OfflineInferenceError)) options.onTransportError?.(error);
-    throw error instanceof OfflineInferenceError ? error : new OfflineInferenceError('transport');
+    if (!isOfflineInferenceError(error)) options.onTransportError?.(error);
+    throw isOfflineInferenceError(error) ? error : new OfflineInferenceError('transport');
   } finally {
     clearDeadline();
     signal?.removeEventListener('abort', cancel);
