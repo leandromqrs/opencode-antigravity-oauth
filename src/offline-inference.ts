@@ -1,5 +1,7 @@
 import { inferenceDeadline, inferenceTimeout, type InferenceTimeout } from './inference-timeout.js';
+import { OfflineInferenceError, type OfflineErrorCode } from './offline-error.js';
 
+export { OfflineInferenceError };
 export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject;
 export type JsonObject = { [key: string]: JsonValue };
 export interface InferenceChunk {
@@ -7,21 +9,14 @@ export interface InferenceChunk {
   usage?: Record<string, number>;
 }
 export type OfflineTransport = (body: string, signal: AbortSignal, options?: { readonly timeout?: InferenceTimeout }) => AsyncIterable<Uint8Array>;
-type ErrorCode = 'invalid' | 'unsupported' | 'limit' | 'remote' | 'truncated' | 'closed' | 'cancelled' | 'transport';
-
-export class OfflineInferenceError extends Error {
-  constructor(public readonly code: ErrorCode, public readonly stage?: 'framing' | 'response' | 'native_usage' | 'http_400' | 'http_401' | 'http_403' | 'http_429' | 'http_429_capacity' | 'http_429_quota' | 'http_429_rate' | 'http_5xx' | 'http_error') {
-    super(`Offline inference: ${code}`);
-    this.name = 'OfflineInferenceError';
-  }
-}
 
 const MAX_BYTES = 1_048_576;
+export const REQUEST_MAX_BYTES = 8 * 1_048_576;
 const finishReasons = ['FINISH_REASON_UNSPECIFIED', 'STOP', 'MAX_TOKENS', 'SAFETY', 'RECITATION', 'OTHER', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'MALFORMED_FUNCTION_CALL', 'MODEL_ARMOR', 'IMAGE_SAFETY', 'IMAGE_PROHIBITED_CONTENT', 'IMAGE_RECITATION', 'IMAGE_OTHER', 'UNEXPECTED_TOOL_CALL', 'NO_IMAGE', 'MALFORMED_RESPONSE', 'CONTINUATION', 'TOO_MANY_TOOL_CALLS'];
 const thinkingLevels = ['THINKING_LEVEL_UNSPECIFIED', 'LOW', 'MEDIUM', 'HIGH', 'MINIMAL', 'EXTRA_HIGH', 'MAX', 'XHIGH'];
 const usageFields = ['promptTokenCount', 'candidatesTokenCount', 'totalTokenCount', 'toolUsePromptTokenCount', 'thoughtsTokenCount', 'cachedContentTokenCount'];
 
-function fail(code: ErrorCode = 'invalid'): never { throw new OfflineInferenceError(code); }
+function fail(code: OfflineErrorCode = 'invalid'): never { throw new OfflineInferenceError(code); }
 
 function object(value: unknown): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) fail();
@@ -60,14 +55,14 @@ function int32(value: unknown): number {
   return value;
 }
 
-function json(value: unknown): JsonValue {
+function json(value: unknown, limit = MAX_BYTES): JsonValue {
   let nodes = 0, bytes = 0;
-  function charge(size: number): void { bytes += size; if (bytes > MAX_BYTES) fail('limit'); }
+  function charge(size: number): void { bytes += size; if (bytes > limit) fail('limit'); }
   function clone(item: unknown, depth: number): JsonValue {
     if (++nodes > 10_000 || depth > 16) fail('limit');
     charge(2);
     if (item === null || typeof item === 'boolean') { charge(5); return item; }
-    if (typeof item === 'string') { const s = text(item, true); charge(Buffer.byteLength(JSON.stringify(s))); return s; }
+    if (typeof item === 'string') { const s = text(item, true, limit); charge(Buffer.byteLength(JSON.stringify(s))); return s; }
     if (typeof item === 'number') { if (!Number.isFinite(item)) fail(); charge(24); return item; }
     if (Array.isArray(item)) return list(item, 10_000).map(entry => clone(entry, depth + 1));
     const result: JsonObject = {};
@@ -81,14 +76,14 @@ function json(value: unknown): JsonValue {
   return clone(value, 0);
 }
 
-function parts(value: unknown): JsonObject[] {
-  return list(value, 256, true).map(entry => {
+function parts(value: unknown, limit = MAX_BYTES): JsonObject[] {
+  return list(value, 1024, true).map(entry => {
     const part = object(entry);
     keys(part, ['text', 'functionCall', 'functionResponse', 'thought', 'thoughtSignature']);
     const data = ['text', 'functionCall', 'functionResponse'].filter(key => Object.hasOwn(part, key));
     if (data.length !== 1) fail();
     const result: JsonObject = {};
-    if (Object.hasOwn(part, 'text')) result.text = text(part.text, true);
+    if (Object.hasOwn(part, 'text')) result.text = text(part.text, true, limit);
     for (const kind of ['functionCall', 'functionResponse']) {
       if (!Object.hasOwn(part, kind)) continue;
       const tool = object(part[kind]);
@@ -96,7 +91,7 @@ function parts(value: unknown): JsonObject[] {
       keys(tool, ['id', 'name', payload]);
       const converted: JsonObject = { name: identifier(tool.name) };
       if (Object.hasOwn(tool, 'id')) converted.id = identifier(tool.id);
-      if (Object.hasOwn(tool, payload)) converted[payload] = json(object(tool[payload]));
+      if (Object.hasOwn(tool, payload)) converted[payload] = json(object(tool[payload]), limit);
       result[kind] = converted;
     }
     if (Object.hasOwn(part, 'thought')) {
@@ -112,10 +107,10 @@ function parts(value: unknown): JsonObject[] {
   });
 }
 
-function content(value: unknown, system = false): JsonObject {
+function content(value: unknown, system = false, limit = MAX_BYTES): JsonObject {
   const entry = object(value);
   keys(entry, ['role', 'parts']);
-  const result: JsonObject = { parts: parts(entry.parts) };
+  const result: JsonObject = { parts: parts(entry.parts, limit) };
   if (Object.hasOwn(entry, 'role')) {
     if (!['user', 'model'].includes(entry.role as string)) fail('unsupported');
     result.role = entry.role as string;
@@ -157,25 +152,25 @@ function generation(value: unknown): JsonObject {
 
 export function buildInferenceRequest(value: unknown, options: { localIdentity?: boolean } = {}): string {
   if (options.localIdentity !== undefined && typeof options.localIdentity !== 'boolean') fail();
-  const entry = object(json(value));
+  const entry = object(json(value, REQUEST_MAX_BYTES));
   keys(entry, ['project', 'model', 'requestId', 'contents', 'systemInstruction', 'generationConfig', 'tools']);
-  const request: JsonObject = { contents: list(entry.contents, 256, true).map(v => content(v)) };
-  if (Object.hasOwn(entry, 'systemInstruction')) request.systemInstruction = content(entry.systemInstruction, true);
+  const request: JsonObject = { contents: list(entry.contents, 1024, true).map(v => content(v, false, REQUEST_MAX_BYTES)) };
+  if (Object.hasOwn(entry, 'systemInstruction')) request.systemInstruction = content(entry.systemInstruction, true, REQUEST_MAX_BYTES);
   if (Object.hasOwn(entry, 'generationConfig')) request.generationConfig = generation(entry.generationConfig);
   if (Object.hasOwn(entry, 'tools')) {
-    request.tools = [{ functionDeclarations: list(entry.tools, 64, true).map(v => {
+    request.tools = [{ functionDeclarations: list(entry.tools, 256, true).map(v => {
       const tool = object(v); keys(tool, ['name', 'description', 'parametersJsonSchema', 'responseJsonSchema']);
       const result: JsonObject = { name: identifier(tool.name) };
-      if (Object.hasOwn(tool, 'description')) result.description = text(tool.description, true);
-      if (Object.hasOwn(tool, 'parametersJsonSchema')) result.parametersJsonSchema = json(object(tool.parametersJsonSchema));
-      if (Object.hasOwn(tool, 'responseJsonSchema')) result.responseJsonSchema = json(object(tool.responseJsonSchema));
+      if (Object.hasOwn(tool, 'description')) result.description = text(tool.description, true, REQUEST_MAX_BYTES);
+      if (Object.hasOwn(tool, 'parametersJsonSchema')) result.parametersJsonSchema = json(object(tool.parametersJsonSchema), REQUEST_MAX_BYTES);
+      if (Object.hasOwn(tool, 'responseJsonSchema')) result.responseJsonSchema = json(object(tool.responseJsonSchema), REQUEST_MAX_BYTES);
       return result;
     }) }];
   }
   const project = Object.hasOwn(entry, 'project') ? identifier(entry.project) : undefined;
   if (project !== undefined && !project.trim()) fail();
   const body = JSON.stringify({ ...(project === undefined ? {} : { project }), model: identifier(entry.model), requestId: identifier(entry.requestId), request, ...(options.localIdentity ? { userAgent: 'antigravity', requestType: 'agent' } : {}) });
-  if (Buffer.byteLength(body) > MAX_BYTES) fail('limit');
+  if (Buffer.byteLength(body) > REQUEST_MAX_BYTES) fail('limit');
   return body;
 }
 
@@ -303,7 +298,7 @@ function nextWithAbort(iterator: AsyncIterator<Uint8Array>, signal: AbortSignal)
   });
 }
 
-export async function* inferOffline(input: unknown, transport: OfflineTransport, options: { signal?: AbortSignal; localIdentity?: boolean; timeout?: InferenceTimeout } = {}): AsyncGenerator<InferenceChunk> {
+export async function* inferOffline(input: unknown, transport: OfflineTransport, options: { signal?: AbortSignal; localIdentity?: boolean; timeout?: InferenceTimeout; onTransportError?: (error: unknown) => void } = {}): AsyncGenerator<InferenceChunk> {
   const controller = new AbortController();
   const cancel = () => controller.abort();
   const signal = options.signal;
@@ -334,6 +329,7 @@ export async function* inferOffline(input: unknown, transport: OfflineTransport,
       }
     }
   } catch (error) {
+    if (!(error instanceof OfflineInferenceError)) options.onTransportError?.(error);
     throw error instanceof OfflineInferenceError ? error : new OfflineInferenceError('transport');
   } finally {
     clearDeadline();

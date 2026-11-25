@@ -63,7 +63,7 @@ test('rejects unsupported input, conflicting oneofs, malformed arguments and inv
   }
   const cyclic = {}; cyclic.x = cyclic;
   assert.throws(() => buildInferenceRequest({ ...input(), tools: [{ name: 'x', parametersJsonSchema: cyclic }] }));
-  assert.throws(() => buildInferenceRequest({ ...input(), contents: [{ role: 'user', parts: [{ text: 'x'.repeat(1_048_577) }] }] }), code('limit'));
+  assert.throws(() => buildInferenceRequest({ ...input(), contents: [{ role: 'user', parts: [{ text: 'x'.repeat(8_388_609) }] }] }), code('limit'));
 });
 
 test('rejects malformed/unsupported responses and sanitizes remote errors', () => {
@@ -173,7 +173,7 @@ test('CRLF/UTF8 boundaries survive every byte split and chunks do not alias sour
 });
 
 test('bounds aggregate object complexity and event counts, not only individual strings', () => {
-  assert.throws(() => buildInferenceRequest({ ...input(), contents: [{ role: 'user', parts: Array.from({ length: 3 }, () => ({ text: 'x'.repeat(400_000) })) }] }), code('limit'));
+  assert.throws(() => buildInferenceRequest({ ...input(), contents: [{ role: 'user', parts: Array.from({ length: 3 }, () => ({ text: 'x'.repeat(3_000_000) })) }] }), code('limit'));
   const d = createInferenceDecoder(); const bytes = frame(wire([{ text: 'x' }]));
   for (let i = 0; i < 1024; i++) d.push(bytes);
   assert.throws(() => d.push(bytes), code('limit'));

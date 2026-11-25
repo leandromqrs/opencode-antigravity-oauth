@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { createOfflineModel } from './offline-opencode.js';
-import { OfflineInferenceError } from './offline-inference.js';
+const offlineModule = await import(`./offline-opencode.js?runtime=${new URL(import.meta.url).searchParams.get('runtime') ?? ''}`) as typeof import('./offline-opencode.js');
+const { createOfflineModel, OfflineInferenceError } = offlineModule;
 import { binding, createHTTP, record, rejectConfigured, type Configuration, type Fetch, type PresetOAuthConfiguration } from './configured-security.js';
 import { CatalogDiagnostic } from './configured-catalog.js';
 import type { LanguageModel } from '@opencode/ai';

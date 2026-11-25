@@ -95,16 +95,19 @@ test('cumulative snapshots track reasoning and visible text independently across
   await assert.rejects(ai.generate({ model: invalid, prompt: 'x' }));
 });
 
-test('assistant metadata only accepts the opaque signature whitelist; user/system stay strict', async () => {
+test('assistant metadata tolerates foreign providers but validates our signature; user/system stay strict', async () => {
   let calls = 0;
   const model = createOfflineModel(config(async function* () { calls++; yield frame(response([{ text: 'ok' }], 'STOP')); }));
-  const invalidMetadata = [null, {}, { other: { thoughtSignature: 'YWJj' } },
-    { ...metadata('YWJj'), other: {} }, { offlineInference: {} },
-    { offlineInference: { thoughtSignature: 'YWJj', unknown: true } },
+  const invalidMetadata = [null, { offlineInference: {} },
     { offlineInference: { thoughtSignature: 1 } }, metadata('invalid!')];
+  const foreignMetadata = [{}, { other: { thoughtSignature: 'YWJj' } },
+    { ...metadata('YWJj'), other: {} }, { offlineInference: { thoughtSignature: 'YWJj', unknown: true } }];
   for (const type of ['text', 'reasoning']) {
     for (const providerMetadata of invalidMetadata) {
       await assert.rejects(ai.generate({ model, messages: [{ role: 'assistant', content: [{ type, text: 'secret', providerMetadata }] }] }), `${type}: metadata`);
+    }
+    for (const providerMetadata of foreignMetadata) {
+      assert.equal((await ai.generate({ model, messages: [{ role: 'assistant', content: [{ type, text: 'secret', providerMetadata }] }] })).text, 'ok');
     }
     for (const extra of [...(type === 'reasoning' ? [{ encrypted: 'secret' }] : []), { cache: { type: 'ephemeral' } }, { metadata: { secret: true } }]) {
       await assert.rejects(ai.generate({ model, messages: [{ role: 'assistant', content: [{ type, text: 'secret', ...extra }] }] }), `${type}: ${Object.keys(extra)}`);
@@ -118,7 +121,7 @@ test('assistant metadata only accepts the opaque signature whitelist; user/syste
     const input = role === 'user' ? { messages: [{ role, content: [part] }] } : { system: [part], prompt: 'x' };
     await assert.rejects(ai.generate({ model, ...input }));
   }
-  assert.equal(calls, 0);
+  assert.equal(calls, 8);
 });
 
 test('a signed cumulative snapshot seals its exact text; later signed revisions fail closed', async () => {

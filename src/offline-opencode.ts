@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { AIError, InvalidRequestError, InvalidProviderOutputError, LanguageModel, LLMEvent, Usage, type LLMRequest } from '@opencode/ai';
 import { Protocol, Route } from '@opencode/ai/route';
 import { Effect, Schema, Stream } from 'effect';
-import { buildInferenceRequest, inferOffline, OfflineInferenceError, type OfflineTransport } from './offline-inference.js';
+import type { OfflineTransport } from './offline-inference.js';
+
+// The host caches ES modules by URL; the per-runtime query lets a location reload pick up code updates
+// without a process restart. OfflineInferenceError keeps a single identity via the stable offline-error module.
+const inferenceModule = await import(`./offline-inference.js?runtime=${new URL(import.meta.url).searchParams.get('runtime') ?? ''}`) as typeof import('./offline-inference.js');
+const { buildInferenceRequest, inferOffline, OfflineInferenceError } = inferenceModule;
+export { OfflineInferenceError };
 import { inferenceTimeout, type InferenceTimeout } from './inference-timeout.js';
 
 export interface OfflineModelConfig {
@@ -170,6 +176,17 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
     if (system && metadata !== undefined) validateSystemInstructionMetadata(metadata, part.text);
     return { text: system ? neutralizeSystemText(part.text) : part.text };
   });
+  const contentResultValue = (value: unknown): unknown => {
+    if (!Array.isArray(value)) invalid();
+    return value.map(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) invalid();
+      const entry = item as { type?: unknown; text?: unknown; uri?: unknown; mime?: unknown; name?: unknown };
+      if (entry.type === 'text' && typeof entry.text === 'string') return { type: 'text', text: entry.text };
+      if (entry.type === 'file' && typeof entry.uri === 'string' && typeof entry.mime === 'string')
+        return { type: 'file', uri: entry.uri, mime: entry.mime, ...(typeof entry.name === 'string' ? { name: entry.name } : {}) };
+      return invalid();
+    });
+  };
   const contents = request.messages.map(message => {
     fields(message, ['id', 'role', 'content'], 'input_message');
     const messageId: unknown = Object.getOwnPropertyDescriptor(message, 'id')?.value;
@@ -189,40 +206,42 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
         let signature: string | undefined;
         if (metadata !== undefined) {
           if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) invalid();
-          fields(metadata, ['offlineInference']);
-          if (Reflect.ownKeys(metadata).length !== 1 || !Object.hasOwn(metadata, 'offlineInference')) invalid();
+          // History carried over from other providers carries their metadata; only our own signature is forwarded.
           const meta = metadata.offlineInference;
-          if (!meta || typeof meta !== 'object' || Array.isArray(meta)) invalid();
-          fields(meta, ['thoughtSignature']);
-          if (Reflect.ownKeys(meta).length !== 1 || !Object.hasOwn(meta, 'thoughtSignature') || typeof meta.thoughtSignature !== 'string') invalid();
-          signature = meta.thoughtSignature;
+          if (meta !== undefined) {
+            if (!meta || typeof meta !== 'object' || Array.isArray(meta) || typeof meta.thoughtSignature !== 'string') invalid();
+            signature = meta.thoughtSignature;
+          }
         }
         return { text: part.text, ...(part.type === 'reasoning' ? { thought: true } : {}),
           ...(signature === undefined ? {} : { thoughtSignature: signature }) };
       }
       if (part.type === 'text' && message.role === 'user') return parts([part])[0];
       if (part.type === 'tool-call' && message.role === 'assistant') {
-        fields(part, ['type', 'id', 'name', 'input', 'providerMetadata', 'providerExecuted'], 'input_part');
+        fields(part, ['type', 'id', 'name', 'namespace', 'input', 'providerMetadata', 'providerExecuted', 'cache'], 'input_part');
         const providerExecuted: unknown = Object.getOwnPropertyDescriptor(part, 'providerExecuted')?.value;
         if (providerExecuted !== undefined && providerExecuted !== false) invalid('input_part');
         const meta = part.providerMetadata?.offlineInference;
-        if (part.providerMetadata && (!meta || Object.keys(part.providerMetadata).length !== 1)) invalid();
-        if (meta) fields(meta, ['thoughtSignature']);
+        if (meta !== undefined && (!meta || typeof meta !== 'object' || Array.isArray(meta))) invalid();
         return { functionCall: { id: part.id, name: mapName(part.name), args: part.input },
           ...(meta?.thoughtSignature === undefined ? {} : { thoughtSignature: meta.thoughtSignature }) };
       }
       if (part.type === 'tool-result' && message.role === 'tool') {
-        fields(part, ['type', 'id', 'name', 'result', 'providerMetadata', 'providerExecuted'], 'input_part');
+        fields(part, ['type', 'id', 'name', 'namespace', 'result', 'output', 'providerMetadata', 'providerExecuted', 'cache'], 'input_part');
         const providerExecuted: unknown = Object.getOwnPropertyDescriptor(part, 'providerExecuted')?.value;
         if (providerExecuted !== undefined && providerExecuted !== false) invalid('input_part');
-        if (part.providerMetadata) {
-          fields(part.providerMetadata, ['offlineInference']);
-          if (!part.providerMetadata.offlineInference) invalid();
-          fields(part.providerMetadata.offlineInference, ['thoughtSignature']);
-        }
+        const resultMeta = part.providerMetadata?.offlineInference;
+        if (resultMeta !== undefined && (!resultMeta || typeof resultMeta !== 'object' || Array.isArray(resultMeta))) invalid();
         fields(part.result, ['type', 'value']);
-        if (!['json', 'text', 'error'].includes(part.result.type)) invalid();
-        return { functionResponse: { id: part.id, name: mapName(part.name), response: { [part.result.type === 'error' ? 'error' : 'result']: part.result.value } } };
+        if (!['json', 'text', 'error', 'content'].includes(part.result.type)) invalid();
+        const value = part.result.type === 'content' ? contentResultValue(part.result.value) : part.result.value;
+        return { functionResponse: { id: part.id, name: mapName(part.name), response: { [part.result.type === 'error' ? 'error' : 'result']: value } } };
+      }
+      const unknownPart = part as { type?: unknown; id?: unknown; name?: unknown; message?: unknown };
+      if (unknownPart.type === 'tool-error' && message.role === 'tool') {
+        fields(part, ['type', 'id', 'name', 'namespace', 'message', 'providerMetadata', 'providerExecuted', 'cache'], 'input_part');
+        if (typeof unknownPart.message !== 'string') invalid();
+        return { functionResponse: { id: unknownPart.id as string, name: mapName(unknownPart.name as string), response: { error: unknownPart.message } } };
       }
       return invalid('input_part');
     });
@@ -248,7 +267,13 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
     ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
     ...(tools.length ? { tools } : {}),
   };
-  try { buildInferenceRequest(input); } catch { invalid('input_serialization'); }
+  try { buildInferenceRequest(input); } catch (error) {
+    console.warn('Antigravity inference serialization rejected:', JSON.stringify({
+      code: error instanceof OfflineInferenceError ? error.code : 'unknown',
+      contents: contents.length, tools: tools.length, bytes: Buffer.byteLength(JSON.stringify(input)),
+    }));
+    invalid('input_serialization');
+  }
   return { input, names: declared, ...(timeout === undefined ? {} : { timeout }) };
 }
 
@@ -275,7 +300,15 @@ async function* events(lowered: Lowered, config: OfflineModelConfig, signal: Abo
     return JSON.stringify(value);
   };
   yield { type: 'step-start', index: 0 };
-  for await (const chunk of inferOffline(lowered.input, config.transport, { signal, ...(lowered.timeout === undefined ? {} : { timeout: lowered.timeout }), ...(config.localIdentity === undefined ? {} : { localIdentity: config.localIdentity }) })) {
+  for await (const chunk of inferOffline(lowered.input, config.transport, { signal, ...(lowered.timeout === undefined ? {} : { timeout: lowered.timeout }), ...(config.localIdentity === undefined ? {} : { localIdentity: config.localIdentity }),
+    onTransportError: error => {
+      const cause = (error as { cause?: { code?: unknown } })?.cause;
+      console.warn('Antigravity inference transport failed:', JSON.stringify({
+        name: error instanceof Error ? error.name : 'unknown',
+        message: error instanceof Error ? error.message.slice(0, 160) : '',
+        causeCode: cause && typeof cause === 'object' && typeof cause.code === 'string' ? cause.code : undefined,
+      }));
+    } })) {
     for (const candidate of chunk.candidates) {
       for (const part of candidate.parts) {
         if (typeof part.text === 'string' && Object.keys(part).every(key => ['text', 'thought', 'thoughtSignature'].includes(key))) {
@@ -367,7 +400,21 @@ export function createOfflineModel(config: OfflineModelConfig): LanguageModel {
       id: 'offline-inference',
       body: { schema: Schema.Unknown, from: (request: LLMRequest) => Effect.try({
         try: () => lower(request, snapshot),
-        catch: error => new AIError({ reason: new InvalidRequestError({ message: `Offline model: unsupported or invalid input (offline_stage=${error instanceof NativeInputError && inputStages.includes(error.stage) ? error.stage : 'input'})` }) }),
+        catch: error => {
+          const stage = error instanceof NativeInputError && inputStages.includes(error.stage) ? error.stage : 'input';
+          const fingerprint = (request.messages ?? []).slice(0, 64).map(message => ({
+            role: message.role,
+            parts: (message.content ?? []).slice(0, 16).map(raw => {
+              const part = raw as { type?: unknown; text?: unknown; providerMetadata?: unknown };
+              return {
+                type: part.type, text: typeof part.text, empty: part.text === '', keys: Object.keys(raw),
+                ...(part.providerMetadata && typeof part.providerMetadata === 'object' ? { meta: Object.keys(part.providerMetadata) } : {}),
+              };
+            }),
+          }));
+          console.warn('Antigravity inference input rejected:', JSON.stringify({ stage, tools: (request.tools ?? []).length, system: (request.system ?? []).length, messages: fingerprint }).slice(0, 16000));
+          return new AIError({ reason: new InvalidRequestError({ message: `Offline model: unsupported or invalid input (offline_stage=${stage})` }) });
+        },
       }) },
       stream: { event: Schema.toType(LLMEvent), initial: () => undefined,
         step: (_state: undefined, event: LLMEvent) => Effect.succeed([undefined, [event]] as const),

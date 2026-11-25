@@ -255,7 +255,7 @@ test('native tool output schemas map to bounded response JSON schemas without dr
   const { buildInferenceRequest } = await import('../dist/offline-inference.js');
   assert.deepEqual(JSON.parse(buildInferenceRequest(lowered.input)).request.tools[0].functionDeclarations[0].responseJsonSchema, envelope);
   let reads = 0;
-  for (const outputSchema of [null, [], 'secret', true, { get type() { reads++; return 'secret'; } }, { type: 'object', description: 'x'.repeat(1_048_577) }]) {
+  for (const outputSchema of [null, [], 'secret', true, { get type() { reads++; return 'secret'; } }, { type: 'object', description: 'x'.repeat(8_388_609) }]) {
     await assert.rejects(f.lower({ tools: [{ ...declaration, outputSchema }] }));
   }
   assert.equal(reads, 0);

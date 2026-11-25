@@ -5,7 +5,7 @@ import { buildAuthorizationUrl } from './oauth-workbench.js';
 import { AGY_CONSUMER_CLIENT_ID } from './local-oauth-client.js';
 import { localCliUserAgent } from './configured-user-agent.js';
 import { inferenceDeadline, inferenceTimeout, type InferenceTimeout } from './inference-timeout.js';
-import { OfflineInferenceError } from './offline-inference.js';
+import { OfflineInferenceError, REQUEST_MAX_BYTES } from './offline-inference.js';
 
 export type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 export interface OAuthConfiguration {
@@ -388,7 +388,7 @@ export function createHTTP(fetcher: Fetch) {
       const cancel = () => controller.abort();
       let clearTotal = () => {}, clearHeaders = () => {};
       try {
-        if (!/^[\x21-\x7e]{1,32768}$/u.test(access) || Buffer.byteLength(body) > 1_048_576) rejectConfigured();
+        if (!/^[\x21-\x7e]{1,32768}$/u.test(access) || Buffer.byteLength(body) > REQUEST_MAX_BYTES) rejectConfigured();
         const timeout = inferenceTimeout(requestTimeout);
         signal.addEventListener('abort', cancel, { once: true });
         if (signal.aborted) controller.abort();
