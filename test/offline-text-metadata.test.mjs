@@ -79,6 +79,24 @@ test('unsigned reasoning history lowers explicitly without leaking reasoning int
   assert.deepEqual(body.request.contents, [{ role: 'model', parts: [{ text: 'thought', thought: true }, { text: 'answer' }] }]);
 });
 
+test('Claude wire models replay unsigned reasoning as readable text, never an unsigned thought block', async () => {
+  let body;
+  const claudeConfig = transport => ({ ...config(transport), model: 'claude-sonnet-4-6' });
+  const model = createOfflineModel(claudeConfig(async function* (request) {
+    body = JSON.parse(request); yield frame(response([{ text: 'visible' }], 'STOP'));
+  }));
+  await ai.generate({ model, messages: [{ role: 'assistant', content: [
+    { type: 'reasoning', text: 'unsigned thought' },
+    { type: 'reasoning', text: 'signed thought', providerMetadata: metadata('YWJj') },
+    { type: 'text', text: 'answer' },
+  ] }] });
+  assert.deepEqual(body.request.contents, [{ role: 'model', parts: [
+    { text: 'unsigned thought' },
+    { text: 'signed thought', thought: true, thoughtSignature: 'YWJj' },
+    { text: 'answer' },
+  ] }]);
+});
+
 test('cumulative snapshots track reasoning and visible text independently across transitions', async () => {
   const frames = [response([{ text: 'r', thought: true }]), response([{ text: 'rr', thought: true }]),
     response([{ text: 'a', thought: false }]), response([{ text: 'aa' }]),

@@ -187,6 +187,10 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
       return invalid();
     });
   };
+  // Claude rejects a replayed thinking block without a signature. Signatures are model-scoped and are dropped
+  // on a model/provider switch (and Antigravity does not expose Claude's), so unsigned reasoning is sent as
+  // readable text instead of a thought block for Claude wire models.
+  const claudeWire = config.model.toLowerCase().includes('claude');
   const contents = request.messages.map(message => {
     fields(message, ['id', 'role', 'content'], 'input_message');
     const messageId: unknown = Object.getOwnPropertyDescriptor(message, 'id')?.value;
@@ -213,7 +217,8 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
             signature = meta.thoughtSignature;
           }
         }
-        return { text: part.text, ...(part.type === 'reasoning' ? { thought: true } : {}),
+        const thought = part.type === 'reasoning' && (signature !== undefined || !claudeWire);
+        return { text: part.text, ...(thought ? { thought: true } : {}),
           ...(signature === undefined ? {} : { thoughtSignature: signature }) };
       }
       if (part.type === 'text' && message.role === 'user') return parts([part])[0];
