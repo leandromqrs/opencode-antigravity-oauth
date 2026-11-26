@@ -162,7 +162,10 @@ function lower(request: NativeRequest, config: OfflineModelConfig): Lowered {
     forward.set(name, mapped); names.set(mapped, name);
     return mapped;
   };
-  const tools = request.tools.map(tool => {
+  // Freeform (grammar/text) tools such as Codex-style apply_patch have no function-declaration equivalent on
+  // this wire; omit them so the model keeps the regular tools instead of the whole request being rejected.
+  const functionTools = request.tools.filter(tool => Object.getOwnPropertyDescriptor(tool, 'freeform')?.value === undefined);
+  const tools = functionTools.map(tool => {
     fields(tool, ['type', 'name', 'description', 'inputSchema', 'outputSchema'], 'input_tools');
     if ('type' in tool && tool.type !== 'tool') invalid();
     if (!('inputSchema' in tool)) invalid();

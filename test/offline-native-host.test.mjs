@@ -230,7 +230,6 @@ test('input diagnostics identify only fixed boundary stages, never values or unk
     [{ tools: [{ name: 'probe', description: '', inputSchema: { type: 'object' }, get outputSchema() { throw Error('synthetic-secret'); } }] }, 'input_tools_schema'],
     [{ tools: [{ name: 'probe', description: '', inputSchema: { type: 'object' }, metadata: { secret: true } }] }, 'input_tools_metadata'],
     [{ tools: [{ name: 'probe', description: '', inputSchema: { type: 'object' }, native: { secret: true } }] }, 'input_tools_native'],
-    [{ tools: [{ name: 'probe', description: '', inputSchema: { type: 'object' }, freeform: { type: 'text' } }] }, 'input_tools_freeform'],
     [{ tools: [{ name: 'probe', description: '', inputSchema: { type: 'object' }, cache: { ttl: '5m' } }] }, 'input_tools_cache'],
     [{ messages: [{ role: 'user', content: [{ type: 'text', text: 'synthetic-secret', cache: 'unsupported' }] }] }, 'input_part_cache'],
     [{ messages: [{ role: 'user', content: [{ type: 'text', text: 'synthetic-secret', metadata: {} }] }] }, 'input_part_metadata'],
@@ -240,6 +239,16 @@ test('input diagnostics identify only fixed boundary stages, never values or unk
   ]) {
     await assert.rejects(f.lower(patch), error => error.message.includes(`offline_stage=${stage}`) && !/synthetic-secret|12345/.test(error.message));
   }
+});
+
+test('freeform tools are omitted from the lowered request while function tools are kept', async () => {
+  const f = fixture();
+  const lowered = await f.lower({ tools: [
+    { name: 'probe', description: '', inputSchema: { type: 'object' }, freeform: { type: 'text' } },
+    { type: 'tool', name: 'keep', description: '', inputSchema: { type: 'object' } },
+  ] });
+  assert.ok(!JSON.stringify(lowered).includes('probe'));
+  assert.ok(JSON.stringify(lowered).includes('keep'));
 });
 
 test('native tool output schemas map to bounded response JSON schemas without dropping constraints', async () => {
