@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { AIError, InvalidRequestError, InvalidProviderOutputError, LanguageModel, LLMEvent, Usage, type LLMRequest } from '@opencode/ai';
+import { AIError, InvalidRequestError, InvalidProviderOutputError, QuotaExceededError, LanguageModel, LLMEvent, Usage, type LLMRequest } from '@opencode/ai';
 import { Protocol, Route } from '@opencode/ai/route';
 import { Effect, Schema, Stream } from 'effect';
 import type { OfflineTransport } from './offline-inference.js';
@@ -48,6 +48,9 @@ function neutralizeSystemText(text: string): string {
 function outputError(error?: unknown): AIError {
   const code = isOfflineInferenceError(error) && ['invalid', 'unsupported', 'remote', 'limit', 'truncated', 'closed', 'cancelled', 'transport'].includes(error.code) ? error.code : 'unsupported';
   const stage = isOfflineInferenceError(error) ? ['framing', 'response', 'native_usage', 'http_400', 'http_401', 'http_403', 'http_429', 'http_429_capacity', 'http_429_quota', 'http_429_rate', 'http_5xx', 'http_error'].includes(error.stage ?? '') ? error.stage : 'transport' : 'native_output';
+  if (code === 'remote' && stage === 'http_429_quota') {
+    return new AIError({ reason: new QuotaExceededError({ message: `Antigravity quota exhausted (offline_code=${code} offline_stage=${stage})` }) });
+  }
   return new AIError({ reason: new InvalidProviderOutputError({ message: `Offline model: invalid or unsupported stream (offline_code=${code} offline_stage=${stage})` }) });
 }
 

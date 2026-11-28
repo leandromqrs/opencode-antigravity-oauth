@@ -6,7 +6,7 @@ import { make } from '@opencode/ai';
 
 const endpoint = 'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse';
 const encoder = new TextEncoder();
-async function failure(response, signal = new AbortController().signal) {
+async function inferenceFailure(response, signal = new AbortController().signal) {
   const http = createHTTP(async () => response);
   const model = createOfflineModel({
     provider: 'synthetic', model: 'synthetic', requestId: 'synthetic',
@@ -18,9 +18,29 @@ async function failure(response, signal = new AbortController().signal) {
     assert.fail('expected inference error');
   } catch (error) {
     assert.doesNotMatch(error.message, /PRIVATE/);
-    return error.message;
+    return error;
   }
 }
+async function failure(response, signal) {
+  return (await inferenceFailure(response, signal)).message;
+}
+
+test('only explicit quota exhaustion becomes a quota error', async () => {
+  for (const [reason, expected] of [
+    ['QUOTA_EXHAUSTED', 'QuotaExceeded'],
+    ['MODEL_CAPACITY_EXHAUSTED', 'InvalidProviderOutput'],
+    ['RATE_LIMIT_EXCEEDED', 'InvalidProviderOutput'],
+    ['UNRECOGNIZED', 'InvalidProviderOutput'],
+  ]) {
+    const error = await inferenceFailure(Response.json({ error: { details: [{
+      '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason,
+    }] } }, { status: 429 }));
+    assert.equal(error.reason?._tag, expected);
+    if (reason === 'QUOTA_EXHAUSTED') assert.match(error.message, /quota exhausted/i);
+  }
+  const generic = await inferenceFailure(Response.json({ error: { message: 'PRIVATE' } }, { status: 429 }));
+  assert.equal(generic.reason?._tag, 'InvalidProviderOutput');
+});
 
 test('inference 429 reports only recognized Google ErrorInfo reasons', async () => {
   for (const [reason, stage] of [
